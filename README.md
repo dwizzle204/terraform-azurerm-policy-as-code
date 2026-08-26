@@ -40,6 +40,10 @@
   - [Tools](#tools)
 - [Limitations](#limitations)
 
+## Testing
+
+This repository uses a layered, credential-free test strategy (fmt → validate → mocked `terraform test` per module → optional live integration suite). Normal PR validation requires no Azure tenant or credentials. See [TESTING.md](TESTING.md) and run everything locally with `./scripts/test.sh`.
+
 ## Repo Folder Structure
 
 ```bash
