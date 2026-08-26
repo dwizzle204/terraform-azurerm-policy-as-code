@@ -170,7 +170,7 @@ locals {
   conflicting_parameters = {
     for parameter_name, declarations in local.parameter_declarations :
     parameter_name => [for d in declarations : d.member]
-    if length(declarations) > 1 && length(distinct([for d in declarations : d.canonical])) > 1
+    if length(declarations) > 1 && (var.merge_effects == true || parameter_name != "effect") && length(distinct([for d in declarations : d.canonical])) > 1
   }
 
   # combine all discovered definition parameters using interpolation

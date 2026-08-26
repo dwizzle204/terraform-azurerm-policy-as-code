@@ -284,7 +284,7 @@ resource "terraform_data" "remediation" {
 }
 
 resource "azurerm_management_group_policy_remediation" "rem" {
-  depends_on                     = [azurerm_role_assignment.remediation]
+  depends_on                     = [azurerm_role_assignment.remediation, azuread_group_member.remediation]
   for_each                       = { for dr in local.definition_reference.mg : dr.reference_id => dr }
   name                           = lower(each.key)
   management_group_id            = local.remediation_scope
@@ -305,7 +305,7 @@ resource "azurerm_management_group_policy_remediation" "rem" {
 }
 
 resource "azurerm_subscription_policy_remediation" "rem" {
-  depends_on                     = [azurerm_role_assignment.remediation]
+  depends_on                     = [azurerm_role_assignment.remediation, azuread_group_member.remediation]
   for_each                       = { for dr in local.definition_reference.sub : dr.reference_id => dr }
   name                           = lower(each.key)
   subscription_id                = local.remediation_scope
@@ -327,7 +327,7 @@ resource "azurerm_subscription_policy_remediation" "rem" {
 }
 
 resource "azurerm_resource_group_policy_remediation" "rem" {
-  depends_on                     = [azurerm_role_assignment.remediation]
+  depends_on                     = [azurerm_role_assignment.remediation, azuread_group_member.remediation]
   for_each                       = { for dr in local.definition_reference.rg : dr.reference_id => dr }
   name                           = lower(each.key)
   resource_group_id              = local.remediation_scope
@@ -349,7 +349,7 @@ resource "azurerm_resource_group_policy_remediation" "rem" {
 }
 
 resource "azurerm_resource_policy_remediation" "rem" {
-  depends_on                     = [azurerm_role_assignment.remediation]
+  depends_on                     = [azurerm_role_assignment.remediation, azuread_group_member.remediation]
   for_each                       = { for dr in local.definition_reference.resource : dr.reference_id => dr }
   name                           = lower(each.key)
   resource_id                    = local.remediation_scope

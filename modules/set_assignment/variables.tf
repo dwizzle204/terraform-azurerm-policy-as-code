@@ -337,9 +337,15 @@ locals {
     file("[ERROR] set_assignment: remediation_reference_ids [${join(", ", setsubtract(var.remediation_reference_ids, [for dr in local.member_definitions : dr.reference_id]))}] are not valid member references. Valid ids: [${join(", ", [for dr in local.member_definitions : dr.reference_id])}].") :
     true
   )
+  # Explicit references are an escape hatch only when the effect is unresolved;
+  # known effects remain subject to Azure's remediation-safe effect set.
   definitions = local.unknown_remediation_references == true ? [
     for dr in local.member_definitions :
-    dr if contains([for e in var.remediate_effects : lower(e)], local.member_effect[dr.reference_id]) || contains(var.remediation_reference_ids, dr.reference_id)
+    dr if(
+      contains(["deployifnotexists", "modify"], local.member_effect[dr.reference_id]) && (
+        contains([for e in var.remediate_effects : lower(e)], local.member_effect[dr.reference_id]) || contains(var.remediation_reference_ids, dr.reference_id)
+      )
+    ) || (contains(var.remediation_reference_ids, dr.reference_id) && local.member_effect[dr.reference_id] == "")
   ] : []
   definition_reference = {
     mg       = local.remediate.mg > 0 ? local.definitions : []

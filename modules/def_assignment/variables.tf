@@ -299,7 +299,13 @@ locals {
     )) :
     local.raw_effect
   )
-  definition_eligible = contains([for e in var.remediate_effects : lower(e)], local.effective_effect) || contains(var.remediation_reference_ids, try(var.definition.name, ""))
+  # Explicit references are an escape hatch only when the effect is unresolved;
+  # known effects remain subject to Azure's remediation-safe effect set.
+  definition_eligible = (
+    contains(["deployifnotexists", "modify"], local.effective_effect) && (
+      contains([for e in var.remediate_effects : lower(e)], local.effective_effect) || contains(var.remediation_reference_ids, try(var.definition.name, ""))
+    )
+  ) || (contains(var.remediation_reference_ids, try(var.definition.name, "")) && local.effective_effect == "")
   unknown_remediation_references = (
     length(var.remediation_reference_ids) > 0 && !contains(var.remediation_reference_ids, try(var.definition.name, "")) ?
     file("[ERROR] def_assignment: remediation_reference_ids [${join(", ", var.remediation_reference_ids)}] do not include this definition ('${try(var.definition.name, "")}'). Valid id: '${try(var.definition.name, "")}'.") :
