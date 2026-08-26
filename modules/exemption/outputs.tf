@@ -10,3 +10,8 @@ output "exemption" {
     expires_on               = local.expires_on
   }
 }
+
+output "governance" {
+  description = "The governance contract fields when var.governed is set (owner, requester, approver, trackingReference, reason, mitigation, created); null otherwise"
+  value       = local.governance_metadata
+}

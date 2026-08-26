@@ -136,10 +136,74 @@ module exemption_team_a_mg_key_vaults_require_purge_protection {
 | policy_assignment_id | The ID of the policy assignment that is being exempted | `string` | n/a | yes |
 | policy_definition_reference_ids | The optional policy definition reference ID list when the associated policy assignment is an assignment of a policy set definition. Omit to exempt all member definitions | `list(string)` | `[]` | no |
 | scope | Scope for the Policy Exemption | `string` | n/a | yes |
+| [governed](#input-governed) | Optional governance contract: waivers require expires_on; mitigated requires mitigation; renders governance metadata | `object` | `null` | no |
 
 ## Outputs
 
 | Name | Description |
 |------|-------------|
 | exemption | The Policy Exemption Details |
+| [governance](#output-governance) | Governance contract fields when `governed` is set, null otherwise | map |  |  |
 <!-- END_TF_DOCS -->
+
+## Governed exemptions (#10)
+
+Set `governed` to capture ownership and lifecycle as validated metadata:
+
+```hcl
+module "exemption" {
+  source               = "../../modules/exemption"
+  name                 = "EXC-10294"
+  display_name         = "Legacy dependency waiver"
+  description          = "Waived for app123 migration"
+  scope                = data.azurerm_subscription.app123.id
+  policy_assignment_id = module.platform_baseline.id
+  exemption_category   = "Waiver"
+  expires_on           = "2026-11-30"
+
+  governed = {
+    owner              = "application-team"
+    approver           = "security-leads"
+    tracking_reference = "RISK-2914"
+    reason             = "Legacy dependency incompatible with control"
+  }
+}
+```
+
+Rules when `governed` is set:
+
+| Rule | Diagnostic |
+|------|------------|
+| `Waiver` requires `expires_on` | plan-time error |
+| `Mitigated` requires `governed.mitigation` | plan-time error |
+| `expires_on` must be `yyyy-mm-dd` (future dates enforced by Azure at apply) | plan-time error |
+
+Fields render into exemption metadata as `owner`, `requester`, `approver`,
+`trackingReference`, `reason`, `mitigation`, `created`. Note: `created` uses
+`timestamp()`, so governed exemptions refresh their metadata on every plan
+(in-place update, no replacement). Omit `governed` for simple exemptions —
+behavior is unchanged.
+
+Data-driven PR-based maintenance example:
+
+```hcl
+module "governed_exemptions" {
+  source   = "../../modules/exemption"
+  for_each = { for e in local.exemptions_data : e.name => e }
+
+  name                 = each.key
+  display_name         = each.value.display_name
+  description          = each.value.reason
+  scope                = each.value.scope
+  policy_assignment_id = each.value.assignment_id
+  exemption_category   = try(each.value.category, "Waiver")
+  expires_on           = try(each.value.expires_on, null)
+  governed = {
+    owner              = each.value.owner
+    approver           = try(each.value.approver, null)
+    tracking_reference = each.value.tracking_reference
+    reason             = each.value.reason
+    mitigation         = try(each.value.mitigation, null)
+  }
+}
+```
