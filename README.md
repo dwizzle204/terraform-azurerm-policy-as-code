@@ -24,6 +24,7 @@
 - [Policy Definition Assignment Module](#policy-definition-assignment-module)
 - [Policy Initiative Assignment Module](#policy-initiative-assignment-module)
 - [Policy Exemption Module](#policy-exemption-module)
+- [Data-Driven Intent Interface](#data-driven-intent-interface)
 - [Achieving Continuous Compliance](#achieving-continuous-compliance)
   - [⚙️Assignment Effects](#️assignment-effects)
   - [👥Role Assignments](#role-assignments)
@@ -38,6 +39,7 @@
   - [Microsoft](#microsoft)
   - [Terraform](#terraform)
   - [Tools](#tools)
+- [Governance & Operations Guides](#governance--operations-guides)
 - [Limitations](#limitations)
 
 ## Compatibility & Testing
@@ -46,17 +48,36 @@ Supported Terraform/provider versions: [COMPATIBILITY.md](COMPATIBILITY.md).
 
 ## Testing
 
-This repository uses a layered, credential-free test strategy (fmt → validate → mocked `terraform test` per module → optional live integration suite). Normal PR validation requires no Azure tenant or credentials. See [TESTING.md](TESTING.md) and run everything locally with `./scripts/test.sh`.
+This repository uses a layered, credential-free test strategy: fmt → tflint → constraint-consistency → per-module init/validate/`terraform test` with mocked providers (6 modules, 80+ runs, Terraform 1.11 + 1.15 matrix in CI) → 3 example-root validations → 7 expected-failure negative checks → isolated opt-in live-Azure suite. Normal PR validation requires no Azure tenant or credentials. See [TESTING.md](TESTING.md); run everything locally with `./scripts/test.sh`.
+
+
+## What's New — Maintenance Program
+
+| Capability | Issue | Notes / migration |
+|------------|-------|-------------------|
+| Provider compatibility matrix | [#9](https://github.com/dwizzle204/terraform-azurerm-policy-as-code/issues/9) | Unified floors (`TF >= 1.11`, azurerm `>=4.35,<6.0`); see [COMPATIBILITY.md](COMPATIBILITY.md) |
+| Fail-fast missing policy files | [#5](https://github.com/dwizzle204/terraform-azurerm-policy-as-code/issues/5) | No silent `{}` fallback; runtime-only definitions still supported |
+| Deterministic definition names | [#6](https://github.com/dwizzle204/terraform-azurerm-policy-as-code/issues/6) | Hash suffix replaces random; migration notes in module README |
+| Collision-resistant assignment names (opt-in) | [#2](https://github.com/dwizzle204/terraform-azurerm-policy-as-code/issues/2) | `collision_resistant_naming = true`; default unchanged |
+| Initiative parameter conflict detection | [#7](https://github.com/dwizzle204/terraform-azurerm-policy-as-code/issues/7) | Incompatible duplicate schemas fail plan; `merge_parameters=false` escape hatch |
+| Effect-filtered, opt-in remediation | [#1](https://github.com/dwizzle204/terraform-azurerm-policy-as-code/issues/1) [#3](https://github.com/dwizzle204/terraform-azurerm-policy-as-code/issues/3) | `remediate_effects`/`remediation_reference_ids`; assignment-only deployments need no RBAC/remediation privileges |
+| Typed input contracts | [#4](https://github.com/dwizzle204/terraform-azurerm-policy-as-code/issues/4) | Remaining `any` documented in COMPATIBILITY.md |
+| Full override/resource-selector contracts | [#8](https://github.com/dwizzle204/terraform-azurerm-policy-as-code/issues/8) | Typed kinds with validation; staged-rollout examples |
+| Governed exemption lifecycle | [#10](https://github.com/dwizzle204/terraform-azurerm-policy-as-code/issues/10) | Optional `governed` contract: ownership, tracking, expiry validation |
+| Data-driven intent interface | [#13](https://github.com/dwizzle204/terraform-azurerm-policy-as-code/issues/13) | See below; YAML-driven example in `examples-intent/` |
 
 ## Repo Folder Structure
 
 ```bash
 📦examples
+📦docs (governance & operations guides)
+📦examples-intent (YAML-driven consumer example)
 📦modules
   └──📂def_assignment
   └──📂definition
   └──📂exemption
   └──📂initiative
+  └──📂intent
   └──📂set_assignment
 📦policies
   └──📂policy_category (e.g. General, should correspond to [var.policy_category])
@@ -189,6 +210,33 @@ module exemption_team_a_mg_deny_nic_public_ip {
 
 > 📘 [Microsoft Docs: Azure Policy exemption structure](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/exemption-structure)
 
+## Data-Driven Intent Interface
+
+The [`modules/intent`](modules/intent) wrapper turns small typed maps into definitions → initiatives → assignments → exemptions using the existing modules — no scope-specific resource selection and no new resource types:
+
+```hcl
+module "intent" {
+  source = "./modules/intent"
+
+  definitions = {
+    deploy_vnet_logs = { category = "Monitoring", policy_name = "deploy_vnet_diagnostic_setting" }
+  }
+  initiatives = {
+    platform_baseline = {
+      display_name           = "Platform Baseline"
+      management_group_id    = var.root_mgmt_group_id
+      member_definition_keys = ["deploy_vnet_logs"]
+      metadata               = { controlIds = ["AZC-01"] } # catalog/control IDs flow into Azure metadata
+    }
+  }
+  assignments = {
+    platform = { initiative_key = "platform_baseline", scope = var.root_mgmt_group_id }
+  }
+}
+```
+
+See `examples-intent/` for a full YAML-driven pattern (`yamldecode` at the root; no extra providers). Governance metadata patterns: [docs/GOVERNANCE_INTEGRATION.md](docs/GOVERNANCE_INTEGRATION.md).
+
 ## Achieving Continuous Compliance
 
 ### ⚙️Assignment Effects
@@ -259,6 +307,12 @@ To trigger an on-demand [compliance scan](https://learn.microsoft.com/en-us/azur
 - [Policy Catalog vs Framework](docs/POLICY_CATALOG.md) — the bundled `policies/` tree is reference content, not a production baseline
 - [Remote State Architecture](docs/REMOTE_STATE.md) — vendor-neutral state isolation, locking, RBAC and blast-radius patterns
 - [Governance Control Catalog Integration](docs/GOVERNANCE_INTEGRATION.md) — mapping external control IDs to policy/initiative/exemption metadata
+
+## Governance & Operations Guides
+
+- [Policy Catalog vs Framework](docs/POLICY_CATALOG.md) — the bundled `policies/` folder is reference content, not a maintained baseline
+- [Remote State Architecture](docs/REMOTE_STATE.md) — centralized state, locking, RBAC separation of core policies from exemptions
+- [Governance Catalog Integration](docs/GOVERNANCE_INTEGRATION.md) — mapping external control catalogs to Azure Policy artifacts
 
 ## 📗Useful Resources
 

@@ -5,6 +5,15 @@ locals {
   # reference-integrity is enforced by cross-variable validations on the
   # intent inputs (see variables.tf), which surface as clean plan errors
   # and are assertable via expect_failures in tests.
+
+  # management-group scope resolution for member definitions (#13 review):
+  # per-definition entry override > first referencing initiative with an mg > null (subscription)
+  definition_management_group = {
+    for k, v in var.definitions : k => coalesce(
+      v.management_group_id,
+      try([for ini in var.initiatives : ini.management_group_id if ini.management_group_id != null && contains(ini.member_definition_keys, k)][0], null)
+    )
+  }
 }
 
 module "definitions" {
@@ -12,9 +21,11 @@ module "definitions" {
 
   for_each = var.definitions
 
-  file_path       = each.value.file_path
-  policy_category = each.value.category
-  policy_name     = each.value.policy_name
+  file_path           = each.value.file_path
+  policy_category     = each.value.category
+  policy_name         = each.value.policy_name
+  management_group_id = local.definition_management_group[each.key]
+  policy_metadata     = each.value.metadata
 }
 
 module "initiatives" {
@@ -27,6 +38,7 @@ module "initiatives" {
   initiative_description  = each.value.description
   initiative_category     = each.value.category
   management_group_id     = each.value.management_group_id
+  initiative_metadata     = each.value.metadata
 
   member_definitions = [for m in each.value.member_definition_keys : module.definitions[m].definition]
 }
@@ -37,14 +49,17 @@ module "assignments" {
   for_each = var.assignments
 
   assignment_scope            = each.value.scope
-  assignment_name             = each.value.assignment_name
+  assignment_name             = coalesce(each.value.assignment_name, each.key)
   assignment_enforcement_mode = each.value.enforcement
   assignment_effect           = each.value.effect
   assignment_parameters       = each.value.parameters
   assignment_not_scopes       = each.value.not_scopes
   assignment_location         = each.value.assignment_location
   skip_remediation            = !each.value.remediate
+  remediate_effects           = each.value.remediate_effects
+  remediation_reference_ids   = each.value.remediation_reference_ids
   role_definition_ids         = each.value.role_definition_ids
+  assignment_metadata         = each.value.metadata
 
   initiative = module.initiatives[each.value.initiative_key].initiative
 }

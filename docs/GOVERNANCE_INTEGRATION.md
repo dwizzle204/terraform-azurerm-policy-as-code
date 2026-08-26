@@ -65,5 +65,8 @@ that fails PRs whose assignments lack required control IDs.
 
 Pair with the [intent interface](../modules/intent/README.md): decode a
 YAML/JSON export of your catalog at the root and feed assignments/exemptions
-from it. Exemption renewals then arrive as PRs against the data file, with the
+from it. Every intent entry accepts a free-form `metadata` field that is
+forwarded verbatim to the underlying policy/initiative/assignment resource,
+so control IDs from the catalog export persist on deployed artifacts.
+Exemption renewals then arrive as PRs against the data file, with the
 catalog as review context.
