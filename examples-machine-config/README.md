@@ -36,7 +36,7 @@ Definitions will stored in the local repo library under [Guest Configuration](..
 
 | Name | Version |
 |------|---------|
-| terraform | >= 1.4 |
+| terraform | >= 1.11 |
 | azurerm | ~> 5.2 |
 
 ## Modules

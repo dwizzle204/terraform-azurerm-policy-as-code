@@ -314,6 +314,19 @@ To trigger an on-demand [compliance scan](https://learn.microsoft.com/en-us/azur
 - [Remote State Architecture](docs/REMOTE_STATE.md) — centralized state, locking, RBAC separation of core policies from exemptions
 - [Governance Catalog Integration](docs/GOVERNANCE_INTEGRATION.md) — mapping external control catalogs to Azure Policy artifacts
 
+## Migration Summary (v3 program changes)
+
+| Issue | Change | Migration |
+|-------|--------|-----------|
+| #9 | Provider/Terraform floors unified (`>= 1.11`, azurerm `>=4.35,<6.0`) | See [COMPATIBILITY.md](COMPATIBILITY.md) |
+| #6 | Definition names now `<prefix>_<8-char-hash>` (was random suffix) | Existing definitions replaced on next apply — [migration notes](modules/definition/README.md#migrating-from-random-suffixed-definition-names-6) |
+| #2 | Opt-in collision-resistant assignment naming (`collision_resistant_naming = true`) | Enabling replaces assignments — [notes](modules/set_assignment/README.md) |
+| #7 | Conflicting initiative parameter schemas now fail plan | Align member schemas or set `merge_parameters = false` |
+| #1/#3 | Remediation is opt-in and effect-filtered (`remediate_effects`) | Set `remediate_effects`/`remediation_reference_ids` to retain prior behavior — [docs](modules/set_assignment/README.md) |
+| #10 | Governed exemption contract available | Optional; simple exemptions unchanged |
+| #8 | Typed override/resource-selector contracts | Legacy map shapes rejected — [migration notes](modules/set_assignment/README.md#migration-notes-8) |
+| #4 | Typed input contracts on definition/initiative/assignment nodes | Malformed structures now fail at plan |
+
 ## 📗Useful Resources
 
 ### GitHub
