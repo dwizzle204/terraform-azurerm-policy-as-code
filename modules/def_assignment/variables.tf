@@ -1,6 +1,16 @@
 variable "definition" {
-  type        = any
-  description = "Policy Definition resource node"
+  description = "Policy Definition resource node (matches the definition module's `definition` output)"
+  type = object({
+    id                  = string
+    name                = string
+    display_name        = optional(string)
+    description         = optional(string)
+    mode                = optional(string)
+    management_group_id = optional(string)
+    metadata            = optional(string)
+    parameters          = optional(string)
+    policy_rule         = optional(string)
+  })
 }
 
 variable "assignment_scope" {
@@ -39,6 +49,7 @@ variable "assignment_effect" {
 }
 
 variable "assignment_parameters" {
+  # any: parameter values are defined by each policy's own schema
   type        = any
   description = "The policy assignment parameters. Changing this forces a new resource to be created"
   default     = {}
@@ -48,6 +59,11 @@ variable "assignment_metadata" {
   type        = any
   description = "The optional metadata for the policy assignment."
   default     = null
+
+  validation {
+    condition     = var.assignment_metadata == null || can({ for k, v in var.assignment_metadata : k => v }) || can(tostring(var.assignment_metadata))
+    error_message = "assignment_metadata must be an object or a JSON-encoded string."
+  }
 }
 
 variable "assignment_enforcement_mode" {
@@ -187,7 +203,8 @@ locals {
   ) : try(lower(substr(coalesce(var.assignment_name, var.definition.name), 0, local.assignment_name_trim)), "")
   display_name = try(coalesce(var.assignment_display_name, var.definition.display_name), "")
   description  = try(coalesce(var.assignment_description, var.definition.description), "")
-  metadata     = jsonencode(try(coalesce(var.assignment_metadata, jsondecode(var.definition.metadata)), {}))
+  # normalize JSON-string input so the boundary jsonencode() never double-encodes (#4)
+  metadata = jsonencode(try(jsondecode(try(coalesce(var.assignment_metadata, jsondecode(var.definition.metadata)), {})), try(coalesce(var.assignment_metadata, jsondecode(var.definition.metadata)), {})))
 
   # convert assignment parameters to the required assignment structure
   parameter_values = var.assignment_parameters != null ? {

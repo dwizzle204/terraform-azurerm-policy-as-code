@@ -247,3 +247,4 @@ run "lowercase_literal_then_effect_is_remediable" {
     error_message = "A lowercase deployIfNotExists literal in then.effect must be classified as remediable"
   }
 }
+

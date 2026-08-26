@@ -64,22 +64,36 @@ variable "policy_rule" {
   type        = any
   description = "The policy rule for the policy definition. This is a JSON object representing the rule that contains an if and a then block. Omitting this assumes the rules are located in the policy file"
   default     = null
+  validation {
+    condition     = var.policy_rule == null || (can({ for k, v in var.policy_rule : k => v }) && !can(tolist(var.policy_rule))) || can(tostring(var.policy_rule))
+    error_message = "policy_rule must be an object (policyRule) or a JSON-encoded string."
+  }
 }
 
 variable "policy_parameters" {
   type        = any
   description = "Parameters for the policy definition. This field is a JSON object representing the parameters of your policy definition. Omitting this assumes the parameters are located in the policy file"
   default     = null
+  validation {
+    condition     = var.policy_parameters == null || (can({ for k, v in var.policy_parameters : k => v }) && !can(tolist(var.policy_parameters))) || can(tostring(var.policy_parameters))
+    error_message = "policy_parameters must be an object (parameters schema) or a JSON-encoded string."
+  }
 }
 
 variable "policy_metadata" {
   type        = any
   description = "The metadata for the policy definition. This is a JSON object representing additional metadata that should be stored with the policy definition. Omitting this will fallback to meta in the definition or merge var.policy_category and var.policy_version"
   default     = null
+  validation {
+    condition     = var.policy_metadata == null || (can({ for k, v in var.policy_metadata : k => v }) && !can(tolist(var.policy_metadata))) || can(tostring(var.policy_metadata))
+    error_message = "policy_metadata must be an object or a JSON-encoded string."
+  }
+  # (list exclusion kept consistent with sibling validations below)
 }
 
 variable "file_path" {
-  type        = any
+  # typed: resolves via file(); see definition_source_paths
+  type        = string
   description = "The filepath to the custom policy. Omitting this assumes the policy is located in the module library"
   default     = null
 }
@@ -132,9 +146,19 @@ locals {
   policy_name  = coalesce(var.policy_name, try((local.policy_object).name, null))
   display_name = coalesce(var.display_name, try((local.policy_object).properties.displayName, local.title))
   description  = coalesce(var.policy_description, try((local.policy_object).properties.description, local.title))
-  metadata     = coalesce(null, var.policy_metadata, try((local.policy_object).properties.metadata, merge({ category = local.category }, { version = local.version })))
-  parameters   = coalesce(null, var.policy_parameters, try((local.policy_object).properties.parameters, {}))
-  policy_rule  = coalesce(var.policy_rule, try((local.policy_object).properties.policyRule, null))
+  metadata     = local.metadata_canonical
+  parameters   = local.parameters_canonical
+  policy_rule  = local.policy_rule_canonical
+
+  # normalize JSON-string inputs to decoded objects so the resource boundary
+  # jsonencode() never produces a double-encoded payload (#4)
+  metadata_canonical    = try(jsondecode(local.metadata_raw), local.metadata_raw)
+  parameters_canonical  = try(jsondecode(local.parameters_raw), local.parameters_raw)
+  policy_rule_canonical = try(jsondecode(local.policy_rule_raw), local.policy_rule_raw)
+
+  metadata_raw    = coalesce(null, var.policy_metadata, try((local.policy_object).properties.metadata, merge({ category = local.category }, { version = local.version })))
+  parameters_raw  = coalesce(null, var.policy_parameters, try((local.policy_object).properties.parameters, {}))
+  policy_rule_raw = coalesce(var.policy_rule, try((local.policy_object).properties.policyRule, null))
 
   # manually generate the definition Id to prevent "Invalid for_each argument" on set_assignment plan/apply
   # deterministic name suffix: identical inputs (logical name + merged

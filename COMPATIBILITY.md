@@ -35,3 +35,15 @@ open upper bounds are exercised.
   unsupported combination.
 
 > Note: the `random` provider is no longer required by any module as of the deterministic definition naming change (#6).
+
+## Remaining `any` inputs (deliberate)
+
+| Module | Variable | Reason |
+|--------|----------|--------|
+| definition | `policy_metadata`, `policy_parameters`, `policy_rule` | Azure Policy's own JSON schema is external and large; top-level shape is validated (string or object) |
+| initiative | `initiative_metadata` | free-form Azure metadata, shape validated |
+| set_assignment / def_assignment | `assignment_parameters` | values are defined by each policy's own parameter schema |
+| set_assignment / def_assignment | `assignment_metadata` | free-form Azure metadata |
+| exemption | `metadata` | free-form Azure metadata, shape validated |
+
+`overrides` and `resource_selectors` remain permissive until #8 introduces their typed contracts.

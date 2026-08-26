@@ -1,6 +1,23 @@
 variable "initiative" {
-  type        = any
-  description = "Policy Initiative resource node"
+  description = "Policy Initiative resource node (matches the initiative module's `initiative` output)"
+  type = object({
+    id                  = string
+    name                = string
+    display_name        = optional(string)
+    description         = optional(string)
+    management_group_id = optional(string)
+    parameters          = optional(any) # arbitrary merged parameter schema object
+    metadata            = optional(string)
+    role_definition_ids = optional(list(string))
+    replace_trigger     = optional(string)
+    reference_ids       = optional(list(string))
+    policy_definition_reference = optional(list(object({
+      policy_definition_id = string
+      reference_id         = string
+      parameter_values     = optional(string)
+      version              = optional(string)
+    })))
+  })
 }
 
 variable "assignment_scope" {
@@ -39,15 +56,22 @@ variable "assignment_effect" {
 }
 
 variable "assignment_parameters" {
+  # any: parameter values are defined by each policy's own schema
   type        = any
   description = "The policy assignment parameters. Changing this forces a new resource to be created"
   default     = null
 }
 
 variable "assignment_metadata" {
+  # any: mirrors Azure Policy free-form assignment metadata
   type        = any
   description = "The optional metadata for the policy assignment."
   default     = null
+
+  validation {
+    condition     = var.assignment_metadata == null || can({ for k, v in var.assignment_metadata : k => v }) || can(tostring(var.assignment_metadata))
+    error_message = "assignment_metadata must be an object or a JSON-encoded string."
+  }
 }
 
 variable "assignment_enforcement_mode" {
@@ -63,19 +87,19 @@ variable "assignment_location" {
 }
 
 variable "non_compliance_messages" {
-  type        = any
+  type        = map(string)
   description = "The optional non-compliance message(s). Key/Value pairs map as policy_definition_reference_id = 'content', use null = 'content' to specify the Default non-compliance message for all member definitions."
   default     = {}
 }
 
 variable "overrides" {
-  type        = list(any)
+  type        = list(any) # typed in #8
   description = "Optional list of assignment Overrides (preview), max 10. Allows you to change the effect of a policy definition without modifying the underlying policy definition or using a parameterized effect in the policy definition"
   default     = []
 }
 
 variable "resource_selectors" {
-  type        = list(any)
+  type        = list(any) # typed in #8
   description = "Optional list of Resource selectors (preview), max 10. These facilitate safe deployment practices (SDP) by enabling you to gradually roll out policy assignments based on factors like resource location, resource type, or whether a resource has a location"
   default     = []
 }
@@ -193,7 +217,8 @@ locals {
   ) : try(lower(substr(coalesce(var.assignment_name, var.initiative.name), 0, local.assignment_name_trim)), "")
   display_name = try(coalesce(var.assignment_display_name, var.initiative.display_name), "")
   description  = try(coalesce(var.assignment_description, var.initiative.description), "")
-  metadata     = jsonencode(try(coalesce(var.assignment_metadata, jsondecode(var.initiative.metadata)), {}))
+  # normalize JSON-string input so the boundary jsonencode() never double-encodes (#4)
+  metadata = jsonencode(try(jsondecode(try(coalesce(var.assignment_metadata, jsondecode(var.initiative.metadata)), {})), try(coalesce(var.assignment_metadata, jsondecode(var.initiative.metadata)), {})))
 
   # convert assignment parameters to the required assignment structure
   parameter_values = var.assignment_parameters != null ? {
