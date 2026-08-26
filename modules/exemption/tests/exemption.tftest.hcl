@@ -136,6 +136,6 @@ run "governed_waiver_with_expiry_renders_governance" {
 
 }
 
-# sentinel failures (waiver-without-expiry, mitigated-without-mitigation) are
+# waiver-without-expiry covered by scripts/test.sh negative check; mitigated-without-mitigation by TMP7 check
 # covered by the scripts/test.sh negative checks — plan-time file() errors
 # abort terraform test runs rather than failing assertions

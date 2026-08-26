@@ -127,11 +127,15 @@ locals {
     created           = timestamp()
   } : null
 
+  # string-form user metadata is decoded before merging so it is not silently
+  # dropped when the governance contract is active (#10 review follow-up)
   metadata = local.governance_checks == "ok" ? (
     var.governed != null ?
-    jsonencode(merge(var.metadata != null && can({ for k, v in var.metadata : k => v }) ? var.metadata : {}, local.governance_metadata)) :
+    jsonencode(merge(local.user_metadata_decoded, local.governance_metadata)) :
     (var.metadata != null ? jsonencode(var.metadata) : null)
   ) : "{}"
+
+  user_metadata_decoded = try(jsondecode(coalesce(null, var.metadata, "{}")), { for k, v in var.metadata : k => v })
 
   # generate reference Ids when unknown, assumes the set was created with the initiative module
   policy_definition_reference_ids = var.camel_case_references == true ? [for name in var.policy_definition_reference_ids :

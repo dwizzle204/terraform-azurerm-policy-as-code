@@ -256,6 +256,46 @@ else
 fi
 popd >/dev/null
 
+echo "== negative check: governed mitigated exemption without mitigation fails (#10) =="
+TMP7=$(mktemp -d)
+mkdir -p "$TMP7/cfg"
+cat >"$TMP7/cfg/main.tf" <<EOF2
+module "gov_exempt" {
+  source               = "$PWD/modules/exemption"
+  name                 = "gov-mitigated-test"
+  display_name         = "Governed Mitigated Test"
+  description          = "negative check"
+  scope                = "/subscriptions/00000000-0000-0000-0000-000000000000"
+  policy_assignment_id = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyAssignments/mock_assignment"
+  exemption_category   = "Mitigated"
+  expires_on           = "2030-01-01"
+  governed = {
+    owner              = "platform-team"
+    tracking_reference = "RISK-1234"
+    reason             = "legacy dependency"
+  }
+}
+EOF2
+cp "$TMP/cfg/providers.tf" "$TMP7/cfg/providers.tf"
+pushd "$TMP7/cfg" >/dev/null
+ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
+ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
+"$TF" init -backend=false -no-color >/dev/null
+set +e
+ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
+ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
+"$TF" plan -no-color >/dev/null 2>"$TMP7/err.txt"
+RC7=$?
+set -e
+if [ $RC7 -eq 0 ]; then
+  FAILED+=("negative-check-governed: expected plan failure for mitigated without mitigation")
+elif ! grep -qi "mitigation" "$TMP7/err.txt"; then
+  FAILED+=("negative-check-governed: did not surface mitigation guidance")
+else
+  echo "OK: governed mitigated without mitigation fails with clear diagnostic"
+fi
+popd >/dev/null
+
 echo "== negative check: unknown remediation_reference_ids fail fast (#1/#3) =="
 TMP3=$(mktemp -d)
 trap 'rm -rf "$TMP" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6"' EXIT

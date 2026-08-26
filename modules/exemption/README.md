@@ -136,13 +136,16 @@ module exemption_team_a_mg_key_vaults_require_purge_protection {
 | policy_assignment_id | The ID of the policy assignment that is being exempted | `string` | n/a | yes |
 | policy_definition_reference_ids | The optional policy definition reference ID list when the associated policy assignment is an assignment of a policy set definition. Omit to exempt all member definitions | `list(string)` | `[]` | no |
 | scope | Scope for the Policy Exemption | `string` | n/a | yes |
+| [governed](#input-governed) | Optional governance contract: waivers require expires_on; mitigated requires mitigation; renders governance metadata | `object` | `null` | no |
 
 ## Outputs
 
 | Name | Description |
 |------|-------------|
 | exemption | The Policy Exemption Details |
+| [governance](#output-governance) | Governance contract fields when `governed` is set, null otherwise | map |  |  |
 <!-- END_TF_DOCS -->
+
 ## Governed exemptions (#10)
 
 Set `governed` to capture ownership and lifecycle as validated metadata:
