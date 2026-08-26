@@ -1,9 +1,10 @@
 name: ci
 
+# LIVE Azure validation pipeline. Requires deployment secrets and therefore
+# runs only on pushes to main; PR validation is handled by tests.yml (issue #16).
 on:
   push:
     branches: [main]
-  pull_request:
 
 jobs:
   ci:
