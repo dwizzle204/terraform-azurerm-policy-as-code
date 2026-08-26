@@ -1,0 +1,19 @@
+{
+  "name": "test_policy",
+  "properties": {
+    "displayName": "Test Policy",
+    "description": "Fixture used by offline module tests",
+    "mode": "Indexed",
+    "metadata": { "category": "Testing", "version": "1.2.3" },
+    "parameters": {
+      "allowedLocations": {
+        "type": "Array",
+        "metadata": { "displayName": "Allowed locations" }
+      }
+    },
+    "policyRule": {
+      "if": { "field": "location", "notIn": "[[parameters('allowedLocations')]]" },
+      "then": { "effect": "Deny" }
+    }
+  }
+}
