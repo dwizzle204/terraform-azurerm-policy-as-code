@@ -38,3 +38,8 @@ output "parameters" {
   description = "The Parameter Values assigned to this Policy Assignment"
   value       = local.parameters
 }
+
+output "remediation_selected_references" {
+  description = "The member definition reference IDs selected for remediation after effect filtering and explicit selection"
+  value       = [for d in local.definitions : d.reference_id]
+}

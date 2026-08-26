@@ -239,8 +239,29 @@ locals {
   # remediation_reference_ids override effect resolution per member.
   # tflint-ignore: terraform_empty_list_equality
   member_definitions = var.assignment_enforcement_mode == true && var.skip_remediation == false && length(local.identity_type) > 0 ? (var.initiative.policy_definition_reference != [] && var.initiative.policy_definition_reference != null ? var.initiative.policy_definition_reference : []) : []
-  member_effect = { for dr in local.member_definitions :
-    dr.reference_id => try(jsondecode(dr.parameter_values != null ? dr.parameter_values : "{}").effect.value, "")
+  # issue #1/#3: robust per-member effect resolution for remediation filtering.
+  # Member effects appear as literals ("DeployIfNotExists"/"deployIfNotExists")
+  # or initiative interpolations "[parameters('effect')]". Interpolations
+  # resolve to an explicit assignment_parameters value for that parameter when
+  # supplied, else the member parameter defaultValue from the merged initiative
+  # schema. Comparison is case-insensitive; unresolvable effects are treated as
+  # NOT remediable but stay selectable via explicit remediation_reference_ids.
+  initiative_parameters_decoded = try(jsondecode(var.initiative.parameters), var.initiative.parameters, {})
+  member_raw_effect = {
+    for dr in local.member_definitions :
+    dr.reference_id => try(jsondecode(coalesce(dr.parameter_values, "{}")).effect.value, "")
+  }
+  member_effect = {
+    for dr in local.member_definitions :
+    dr.reference_id => lower(
+      can(regex("^\\[parameters\\('(.+?)'\\)\\]$", local.member_raw_effect[dr.reference_id])) ?
+      tostring(try(
+        var.assignment_parameters[regex("^\\[parameters\\('(.+?)'\\)\\]$", local.member_raw_effect[dr.reference_id])[0]],
+        local.initiative_parameters_decoded[regex("^\\[parameters\\('(.+?)'\\)\\]$", local.member_raw_effect[dr.reference_id])[0]].defaultValue,
+        ""
+      )) :
+      local.member_raw_effect[dr.reference_id]
+    )
   }
   unknown_remediation_references = (
     length(var.remediation_reference_ids) > 0 && length(setsubtract(var.remediation_reference_ids, [for dr in local.member_definitions : dr.reference_id])) > 0 ?
@@ -249,7 +270,7 @@ locals {
   )
   definitions = local.unknown_remediation_references == true ? [
     for dr in local.member_definitions :
-    dr if contains(var.remediate_effects, local.member_effect[dr.reference_id]) || contains(var.remediation_reference_ids, dr.reference_id)
+    dr if contains([for e in var.remediate_effects : lower(e)], local.member_effect[dr.reference_id]) || contains(var.remediation_reference_ids, dr.reference_id)
   ] : []
   definition_reference = {
     mg       = local.remediate.mg > 0 ? local.definitions : []

@@ -222,3 +222,12 @@ Use `identity_ids` (pre-created user-assigned identity) plus
 ### Migration
 
 Pre-#1 behavior approximated by setting `remediate_effects = ["DeployIfNotExists", "Modify"]`.
+
+## Remediation tasks & initiatives
+
+Azure Policy processes **one policy definition reference per remediation
+task**. When assigning an initiative, this module creates one remediation task
+per eligible member definition reference (effect-filtered, see
+`remediate_effects` / `remediation_reference_ids`), not a single task for the
+whole initiative. Tasks are created only after the assignment's managed
+identity role assignments have been established.

@@ -227,3 +227,23 @@ run "assignment_effect_override_drives_eligibility" {
     error_message = "An assignment_effect override matching the filter makes the definition eligible"
   }
 }
+
+# lowercase literal then.effect from the real library must classify as DINE
+run "lowercase_literal_then_effect_is_remediable" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    # definition contract carries policy_rule/parameters as JSON strings
+    definition = merge(var.definition, {
+      policy_rule = file("tests/fixtures/preview_deploy_linux_azure_monitor_vm_agent.json") == null ? "" : jsonencode(jsondecode(file("tests/fixtures/preview_deploy_linux_azure_monitor_vm_agent.json")).properties.policyRule)
+      parameters  = jsonencode(jsondecode(file("tests/fixtures/preview_deploy_linux_azure_monitor_vm_agent.json")).properties.parameters)
+    })
+  }
+
+  assert {
+    condition     = output.remediation_id != ""
+    error_message = "A lowercase deployIfNotExists literal in then.effect must be classified as remediable"
+  }
+}

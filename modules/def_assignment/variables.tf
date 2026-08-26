@@ -212,8 +212,26 @@ locals {
   # from the assignment override or the policy rule; explicit remediation_reference_ids
   # override effect resolution for this single definition.
   # coalesce skips empty strings so use an explicit null-guard for the override
-  effective_effect    = var.assignment_effect != null ? var.assignment_effect : try(jsondecode(var.definition.policy_rule).then.effect, "")
-  definition_eligible = contains(var.remediate_effects, local.effective_effect) || contains(var.remediation_reference_ids, try(var.definition.name, ""))
+  # issue #1/#3: robust effect resolution (see set_assignment counterpart).
+  # Handles literal effects in any casing and initiative interpolations
+  # "[parameters('x')]" resolved against assignment_parameters first, then the
+  # definition parameter defaultValue. Unresolvable => not remediable unless
+  # explicitly selected via remediation_reference_ids.
+  definition_parameters_decoded = try(jsondecode(var.definition.parameters), var.definition.parameters, {})
+  # note: not coalesce() - it rejects empty strings, which are a valid
+  # "no effect declared" outcome from try()
+  raw_effect             = var.assignment_effect != null ? var.assignment_effect : try(jsondecode(var.definition.policy_rule).then.effect, "")
+  interpolated_parameter = can(regex("^\\[parameters\\('(.+?)'\\)\\]$", local.raw_effect)) ? regex("^\\[parameters\\('(.+?)'\\)\\]$", local.raw_effect)[0] : null
+  effective_effect = lower(
+    local.interpolated_parameter != null ?
+    tostring(try(
+      var.assignment_parameters[local.interpolated_parameter],
+      local.definition_parameters_decoded[local.interpolated_parameter].defaultValue,
+      ""
+    )) :
+    local.raw_effect
+  )
+  definition_eligible = contains([for e in var.remediate_effects : lower(e)], local.effective_effect) || contains(var.remediation_reference_ids, try(var.definition.name, ""))
   unknown_remediation_references = (
     length(var.remediation_reference_ids) > 0 && !contains(var.remediation_reference_ids, try(var.definition.name, "")) ?
     file("[ERROR] def_assignment: remediation_reference_ids [${join(", ", var.remediation_reference_ids)}] do not include this definition ('${try(var.definition.name, "")}'). Valid id: '${try(var.definition.name, "")}'.") :

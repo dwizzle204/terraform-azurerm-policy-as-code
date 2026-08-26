@@ -230,3 +230,12 @@ role assignments now run before remediation tasks (`depends_on`). See
 managed identity/RBAC patterns. Migration: set
 `remediate_effects = ["DeployIfNotExists", "Modify"]` to approximate pre-#1
 behavior.
+
+## Remediation tasks & initiatives
+
+Azure Policy processes **one policy definition reference per remediation
+task**. When assigning an initiative, this module creates one remediation task
+per eligible member definition reference (effect-filtered, see
+`remediate_effects` / `remediation_reference_ids`), not a single task for the
+whole initiative. Tasks are created only after the assignment's managed
+identity role assignments have been established.
