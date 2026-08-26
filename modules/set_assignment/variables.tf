@@ -212,10 +212,12 @@ locals {
     azurerm_resource_group_policy_assignment.set[0],
     azurerm_resource_policy_assignment.set[0],
   {})
-  remediation_tasks = try(
+  # merge instead of try: for_each resource maps never error, so a try-chain
+  # always returns the first (management group) map even at other scopes
+  remediation_tasks = merge(
     azurerm_management_group_policy_remediation.rem,
     azurerm_subscription_policy_remediation.rem,
     azurerm_resource_group_policy_remediation.rem,
     azurerm_resource_policy_remediation.rem,
-  {})
+  )
 }
