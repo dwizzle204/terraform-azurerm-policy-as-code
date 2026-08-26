@@ -146,6 +146,23 @@ variable "skip_remediation" {
   default     = false
 }
 
+variable "remediate_effects" {
+  type        = list(string)
+  description = "Policy effects eligible for automatic remediation tasks. Defaults to [] (remediation is opt-in per #1/#3). Only DeployIfNotExists and Modify can be remediated by Azure Policy."
+  default     = []
+
+  validation {
+    condition     = length([for e in var.remediate_effects : e if !contains(["DeployIfNotExists", "Modify"], e)]) == 0
+    error_message = "Only DeployIfNotExists and Modify effects can be remediated."
+  }
+}
+
+variable "remediation_reference_ids" {
+  type        = list(string)
+  description = "Explicit definition reference ids (for def_assignment: definition names) to remediate regardless of resolved effect. Unknown ids fail the plan. Ignored when empty."
+  default     = []
+}
+
 variable "skip_role_assignment" {
   type        = bool
   description = "Should the module skip creation of role assignment for policies that DeployIfNotExists and Modify"
@@ -191,7 +208,18 @@ locals {
   role_definition_ids = var.skip_role_assignment == false && length(var.aad_group_remediation_object_ids) == 0 && try(values(local.identity_type)[0], "") == "SystemAssigned" ? try(coalescelist(var.role_definition_ids, lookup(try(jsondecode(var.definition.policy_rule).then.details, {}), "roleDefinitionIds", [])), []) : []
 
   # if creating role assignments also create a remediation task for policies with DeployIfNotExists and Modify effects
-  create_remediation = var.assignment_enforcement_mode == true && var.skip_remediation == false && length(local.identity_type) > 0 ? 1 : 0
+  # issue #1/#3: remediation is opt-in and effect-aware. Effective effect comes
+  # from the assignment override or the policy rule; explicit remediation_reference_ids
+  # override effect resolution for this single definition.
+  # coalesce skips empty strings so use an explicit null-guard for the override
+  effective_effect    = var.assignment_effect != null ? var.assignment_effect : try(jsondecode(var.definition.policy_rule).then.effect, "")
+  definition_eligible = contains(var.remediate_effects, local.effective_effect) || contains(var.remediation_reference_ids, try(var.definition.name, ""))
+  unknown_remediation_references = (
+    length(var.remediation_reference_ids) > 0 && !contains(var.remediation_reference_ids, try(var.definition.name, "")) ?
+    file("[ERROR] def_assignment: remediation_reference_ids [${join(", ", var.remediation_reference_ids)}] do not include this definition ('${try(var.definition.name, "")}'). Valid id: '${try(var.definition.name, "")}'.") :
+    true
+  )
+  create_remediation = var.assignment_enforcement_mode == true && var.skip_remediation == false && length(local.identity_type) > 0 && local.unknown_remediation_references == true && local.definition_eligible ? 1 : 0
 
   # assignment location is required when identity is specified
   assignment_location = length(local.identity_type) > 0 ? var.assignment_location : null

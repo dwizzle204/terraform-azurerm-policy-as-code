@@ -191,3 +191,34 @@ module org_mg_configure_az_monitor_linux_vm_initiative {
 ### Collision-resistant assignment names (#2)
 
 `collision_resistant_naming` defaults to `false`, preserving today's truncation behavior byte-for-byte. Enabling it changes the computed assignment name, which forces replacement (destroy/create) of existing assignments — plan during a maintenance window and expect re-creation, not in-place updates. The hash covers scope + initiative identity + requested name only; cosmetic display name/description changes never affect it.
+
+## Remediation lifecycle (#1, #3)
+
+Remediation is **opt-in and effect-aware**:
+
+| Input | Meaning |
+|-------|---------|
+| `remediate_effects` | Member effects eligible for remediation tasks. Default `[]` (disabled). Only `DeployIfNotExists` / `Modify` are valid |
+| `remediation_reference_ids` | Explicit member reference ids to remediate regardless of resolved effect; unknown ids fail the plan |
+| `skip_remediation` | Master switch; suppresses all remediation regardless of the above |
+
+Per-member effect resolution reads the member's `parameter_values.effect.value`.
+
+### Minimum privileges per deployment mode
+
+| Mode | Privileges required by deployment principal |
+|------|---------------------------------------------|
+| Assignment only (`remediate_effects=[]`, no identity) | Policy assignment write at scope |
+| + managed identity | As above + Microsoft.ManagedIdentity write + role assignment read at location |
+| + module-managed RBAC | As above + role assignment write for each `role_definition_ids` entry |
+| + remediation | As above + `Microsoft.PolicyInsights/remediations/*` at remediation scope |
+
+### Externally managed pattern
+
+Use `identity_ids` (pre-created user-assigned identity) plus
+`skip_role_assignment = true` with your own RBAC provisioning, then set
+`remediate_effects` to hand execution to this module only.
+
+### Migration
+
+Pre-#1 behavior approximated by setting `remediate_effects = ["DeployIfNotExists", "Modify"]`.

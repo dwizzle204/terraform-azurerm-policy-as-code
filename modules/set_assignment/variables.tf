@@ -152,6 +152,23 @@ variable "skip_remediation" {
   default     = false
 }
 
+variable "remediate_effects" {
+  type        = list(string)
+  description = "Member policy effects eligible for automatic remediation tasks. Defaults to [] (remediation is opt-in per #1/#3). Only DeployIfNotExists and Modify can be remediated by Azure Policy."
+  default     = []
+
+  validation {
+    condition     = length([for e in var.remediate_effects : e if !contains(["DeployIfNotExists", "Modify"], e)]) == 0
+    error_message = "Only DeployIfNotExists and Modify effects can be remediated."
+  }
+}
+
+variable "remediation_reference_ids" {
+  type        = list(string)
+  description = "Explicit initiative member definition reference ids to remediate regardless of resolved effect. Unknown ids fail the plan. Ignored when empty."
+  default     = []
+}
+
 variable "skip_role_assignment" {
   type        = bool
   description = "Should the module skip creation of role assignment for policies that DeployIfNotExists and Modify"
@@ -217,8 +234,23 @@ locals {
   # retrieve definition references & create a remediation task for policies with DeployIfNotExists and Modify effects
   # kept as-is: rewriting the != [] comparison risks cty type-semantics drift;
   # behavior is covered by offline tests
+  # issue #1/#3: remediation is opt-in and effect-aware. Per-member effective
+  # effect comes from the reference parameter_values; explicit
+  # remediation_reference_ids override effect resolution per member.
   # tflint-ignore: terraform_empty_list_equality
-  definitions = var.assignment_enforcement_mode == true && var.skip_remediation == false && length(local.identity_type) > 0 ? (var.initiative.policy_definition_reference != [] && var.initiative.policy_definition_reference != null ? var.initiative.policy_definition_reference : []) : []
+  member_definitions = var.assignment_enforcement_mode == true && var.skip_remediation == false && length(local.identity_type) > 0 ? (var.initiative.policy_definition_reference != [] && var.initiative.policy_definition_reference != null ? var.initiative.policy_definition_reference : []) : []
+  member_effect = { for dr in local.member_definitions :
+    dr.reference_id => try(jsondecode(dr.parameter_values != null ? dr.parameter_values : "{}").effect.value, "")
+  }
+  unknown_remediation_references = (
+    length(var.remediation_reference_ids) > 0 && length(setsubtract(var.remediation_reference_ids, [for dr in local.member_definitions : dr.reference_id])) > 0 ?
+    file("[ERROR] set_assignment: remediation_reference_ids [${join(", ", setsubtract(var.remediation_reference_ids, [for dr in local.member_definitions : dr.reference_id]))}] are not valid member references. Valid ids: [${join(", ", [for dr in local.member_definitions : dr.reference_id])}].") :
+    true
+  )
+  definitions = local.unknown_remediation_references == true ? [
+    for dr in local.member_definitions :
+    dr if contains(var.remediate_effects, local.member_effect[dr.reference_id]) || contains(var.remediation_reference_ids, dr.reference_id)
+  ] : []
   definition_reference = {
     mg       = local.remediate.mg > 0 ? local.definitions : []
     sub      = local.remediate.sub > 0 ? local.definitions : []

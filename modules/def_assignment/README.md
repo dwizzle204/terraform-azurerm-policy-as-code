@@ -218,3 +218,15 @@ Set `collision_resistant_naming = true` to append a deterministic 8-character ha
 ## Migration notes
 
 Enabling `collision_resistant_naming` changes the computed assignment name, forcing destroy/create replacement of existing assignments. Plan during a maintenance window.
+
+## Remediation lifecycle (#1, #3)
+
+Remediation is **opt-in and effect-aware**: the effective effect is the
+`assignment_effect` override or the policy rule's `then.effect`, matched against
+`remediate_effects` (default `[]` = disabled). `remediation_reference_ids`
+explicitly selects this definition by name regardless of effect. Module-managed
+role assignments now run before remediation tasks (`depends_on`). See
+`modules/set_assignment/README.md` for the privilege table and externally
+managed identity/RBAC patterns. Migration: set
+`remediate_effects = ["DeployIfNotExists", "Modify"]` to approximate pre-#1
+behavior.

@@ -94,6 +94,7 @@ run "identity_and_dine_reference_creates_remediation" {
   command = plan
 
   variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
     role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
     initiative = merge(var.initiative, {
       policy_definition_reference = [
@@ -163,13 +164,13 @@ run "resource_scope_selects_resource_assignment" {
   }
 }
 
-run "remediation_tasks_are_not_effect_filtered_upstream" {
-  # documents current upstream behavior: remediation tasks are gated on
-  # enforcement mode + managed identity, NOT on the member effect. A member
-  # with a plain Audit effect still receives a remediation task.
+# issue #1/#3: remediation is now effect-filtered and opt-in
+run "remediation_tasks_are_now_effect_filtered" {
+  # Audit-effect member is NOT eligible even with an explicit DINE/Modify filter
   command = plan
 
   variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
     role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
     initiative = merge(var.initiative, {
       policy_definition_reference = [
@@ -183,8 +184,100 @@ run "remediation_tasks_are_not_effect_filtered_upstream" {
   }
 
   assert {
+    condition     = length(output.remediation_tasks) == 0
+    error_message = "Audit-effect members must never receive remediation tasks"
+  }
+}
+
+run "mixed_effect_initiative_remediates_only_eligible_members" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/dine_member"
+          reference_id         = "dine_member"
+          parameter_values     = jsonencode({ effect = { value = "DeployIfNotExists" } })
+        },
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/deny_member"
+          reference_id         = "deny_member"
+          parameter_values     = jsonencode({ effect = { value = "Deny" } })
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 1 && output.remediation_tasks[0].policy_definition_reference_id == "dine_member"
+    error_message = "Mixed-effect initiatives must only remediate eligible members"
+  }
+}
+
+run "default_remediation_is_opt_in" {
+  command = plan
+
+  variables {
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        { policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/dine_member", reference_id = "dine_member", parameter_values = jsonencode({ effect = { value = "DeployIfNotExists" } }) }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 0
+    error_message = "Default (no remediate_effects) must create zero remediation tasks - remediation is opt-in (#3)"
+  }
+}
+
+run "explicit_reference_ids_override_effect_resolution" {
+  command = plan
+
+  variables {
+    remediate_effects         = []
+    remediation_reference_ids = ["audit_member"]
+    role_definition_ids       = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/audit_member"
+          reference_id         = "audit_member"
+          parameter_values     = jsonencode({ effect = { value = "Audit" } })
+        }
+      ]
+    })
+  }
+
+  assert {
     condition     = length(output.remediation_tasks) == 1 && output.remediation_tasks[0].policy_definition_reference_id == "audit_member"
-    error_message = "Documents upstream behavior: even Audit-effect members get remediation tasks when identity is present"
+    error_message = "Explicitly listed reference ids are remediated regardless of resolved effect"
+  }
+}
+
+run "legacy_parity_with_explicit_filter" {
+  # migration parity: setting the filter reproduces pre-change task counts
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    skip_remediation    = false
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        { policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/m1", reference_id = "m1", parameter_values = jsonencode({ effect = { value = "DeployIfNotExists" } }) },
+        { policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/m2", reference_id = "m2", parameter_values = jsonencode({ effect = { value = "DeployIfNotExists" } }) }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 2
+    error_message = "Legacy parity: two eligible members produce two remediation tasks when the filter is configured"
   }
 }
 

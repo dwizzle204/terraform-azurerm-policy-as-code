@@ -106,13 +106,14 @@ run "skip_remediation_removes_remediation_task" {
   }
 }
 
-# documents upstream behavior: remediation tasks are gated on enforcement
-# mode + managed identity, not on the member effect being DINE/Modify
-run "identity_and_enforcement_gating_creates_remediation_task" {
+# issue #1/#3: remediation requires explicit effect configuration (opt-in)
+run "remediation_requires_explicit_effect_configuration" {
   command = plan
 
   variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
     role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    definition          = merge(var.definition, { policy_rule = jsonencode({ if = {}, then = { effect = "DeployIfNotExists" } }) })
   }
 
   assert {
@@ -196,5 +197,33 @@ run "legacy_truncation_unchanged_by_default" {
   assert {
     condition     = output.assignment_name == lower(substr(var.assignment_name, 0, 64))
     error_message = "Default mode must preserve today's truncation behavior byte-for-byte"
+  }
+}
+
+run "default_remediation_is_opt_in" {
+  command = plan
+
+  variables {
+    role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+  }
+
+  assert {
+    condition     = output.remediation_id == ""
+    error_message = "Default (no remediate_effects) must create no remediation task - opt-in (#3)"
+  }
+}
+
+run "assignment_effect_override_drives_eligibility" {
+  command = plan
+
+  variables {
+    assignment_effect   = "Modify"
+    remediate_effects   = ["Modify"]
+    role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+  }
+
+  assert {
+    condition     = output.remediation_id != ""
+    error_message = "An assignment_effect override matching the filter makes the definition eligible"
   }
 }
