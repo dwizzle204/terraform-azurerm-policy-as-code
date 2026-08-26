@@ -126,20 +126,25 @@ module "org_mg_whitelist_regions" {
   }
 
   # optional resource selectors (preview)
+  # optional resource selectors (preview): typed selector contract (#8)
   resource_selectors = [
     {
       name = "SDPRegions"
-      selectors = {
-        kind = "resourceLocation"
-        in = [ "uk", "uksouth", "ukwest" ]
-      }
+      selectors = [
+        {
+          kind = "resourceLocation"
+          in   = [ "uk", "uksouth", "ukwest" ]
+        }
+      ]
     },
     {
       name = "SDPResourceTypes"
-      selectors = {
-        kind = "resourceType"
-        in = [ "Microsoft.Storage/storageAccounts", "Microsoft.EventHub/namespaces", "Microsoft.OperationalInsights/workspaces" ]
-      }
+      selectors = [
+        {
+          kind = "resourceType"
+          in   = [ "Microsoft.Storage/storageAccounts", "Microsoft.EventHub/namespaces", "Microsoft.OperationalInsights/workspaces" ]
+        }
+      ]
     }
   ]
 }
@@ -239,3 +244,36 @@ per eligible member definition reference (effect-filtered, see
 `remediate_effects` / `remediation_reference_ids`), not a single task for the
 whole initiative. Tasks are created only after the assignment's managed
 identity role assignments have been established.
+
+
+## Migration notes (#8)
+
+`overrides` and `resource_selectors` are now typed lists of objects. The legacy
+map-shaped forms **fail plan-time variable validation**:
+
+```hcl
+# BEFORE (rejected): effect key + single map selector
+overrides = [
+  {
+    effect    = "AuditIfNotExists"
+    selectors = { in = ["member_a"] }
+  }
+]
+
+# AFTER (required): value key + list-of-object selectors with explicit kind
+overrides = [
+  {
+    value     = "AuditIfNotExists"
+    selectors = [
+      { kind = "policyDefinitionReferenceId", in = ["member_a"] }
+    ]
+  }
+]
+```
+
+- `value` replaces `effect` as the override payload key
+- `selectors` is always a list; each selector declares its `kind`
+  (`policyDefinitionReferenceId`; omitted kind defaults to it per provider schema)
+- `resource_selectors.selectors.kind` is required
+  (`resourceLocation`, `resourceType`, `resourceWithoutLocation`)
+- maximum 10 entries per input (enforced)

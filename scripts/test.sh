@@ -182,9 +182,44 @@ else
 fi
 popd >/dev/null
 
+echo "== negative check: legacy map-shaped overrides rejected (#8) =="
+TMP5=$(mktemp -d)
+mkdir -p "$TMP5/cfg"
+cat >"$TMP5/cfg/main.tf" <<EOF
+module "legacy_overrides" {
+  source           = "$PWD/modules/set_assignment"
+  assignment_scope = "/subscriptions/00000000-0000-0000-0000-000000000000"
+  overrides = [
+    {
+      effect    = "Deny"
+      selectors = { in = ["a"] }
+    }
+  ]
+}
+EOF
+cp "$TMP/cfg/providers.tf" "$TMP5/cfg/providers.tf"
+pushd "$TMP5/cfg" >/dev/null
+ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
+ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
+"$TF" init -backend=false -no-color >/dev/null
+set +e
+ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
+ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
+"$TF" plan -no-color >/dev/null 2>"$TMP5/err.txt"
+RC5=$?
+set -e
+if [ $RC5 -eq 0 ]; then
+  FAILED+=("negative-check-overrides: expected plan failure for legacy map-shaped overrides")
+elif ! grep -qiE "(unsupported argument|an argument named .effect.|missing required argument)" "$TMP5/err.txt"; then
+  FAILED+=("negative-check-overrides: did not surface a type-contract error")
+else
+  echo "OK: legacy map-shaped overrides rejected by the type contract"
+fi
+popd >/dev/null
+
 echo "== negative check: unknown remediation_reference_ids fail fast (#1/#3) =="
 TMP3=$(mktemp -d)
-trap 'rm -rf "$TMP" "$TMP2" "$TMP3" "$TMP4"' EXIT
+trap 'rm -rf "$TMP" "$TMP2" "$TMP3" "$TMP4" "$TMP5"' EXIT
 mkdir -p "$TMP3/cfg"
 cat >"$TMP3/cfg/main.tf" <<EOF
 module "unknown_ref_assignment" {

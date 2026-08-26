@@ -34,14 +34,15 @@ module "team_a_mg_deny_nic_public_ip" {
 # Staged rollout (SDP) example (#8): gradually enforce the assignment by
 # excluding a location first, then flipping the effect once validated.
 module "team_a_assignment_staged" {
-  source           = "../../modules/set_assignment"
+  source           = "..//modules/set_assignment"
   assignment_scope = data.azurerm_management_group.team_a.id
   initiative       = module.initiative.initiative
 
+  # effect overrides target member definitions by reference id
   overrides = [
     {
       value     = "Disabled"
-      selectors = [{ kind = "resourceLocation", in = ["swedencentral"] }]
+      selectors = [{ kind = "policyDefinitionReferenceId", in = ["deny_resource_types"] }]
     }
   ]
 

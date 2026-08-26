@@ -113,6 +113,11 @@ variable "overrides" {
     ])
     error_message = "Override selector kind must be one of: policyDefinitionReferenceId, resourceLocation."
   }
+
+  validation {
+    condition     = length(var.overrides) <= 10
+    error_message = "Overrides supports a maximum of 10 entries."
+  }
 }
 
 variable "resource_selectors" {
@@ -135,6 +140,11 @@ variable "resource_selectors" {
       ]
     ]))
     error_message = "Resource selector kind must be one of: resourceLocation, resourceType, resourceWithoutLocation."
+  }
+
+  validation {
+    condition     = length(var.resource_selectors) <= 10
+    error_message = "Resource Selectors supports a maximum of 10 entries."
   }
 }
 

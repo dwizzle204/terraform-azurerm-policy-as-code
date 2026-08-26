@@ -52,18 +52,25 @@ module org_mg_configure_asc_initiative {
   non_compliance_messages = module.configure_asc_initiative.non_compliance_messages
 
   # optional overrides (preview)
+  # optional overrides (preview): typed selector contract (#8)
   overrides = [
     {
-      effect = "AuditIfNotExists"
-      selectors = {
-        in = [ "ExportAscAlertsAndRecommendationsToEventhub", "ExportAscAlertsAndRecommendationsToLogAnalytics" ]
-      }
+      value = "AuditIfNotExists"
+      selectors = [
+        {
+          kind = "policyDefinitionReferenceId"
+          in   = [ "ExportAscAlertsAndRecommendationsToEventhub", "ExportAscAlertsAndRecommendationsToLogAnalytics" ]
+        }
+      ]
     },
     {
-      effect = "Disabled"
-      selectors = {
-        in = [ "AutoSetContactDetails" ]
-      }
+      value = "Disabled"
+      selectors = [
+        {
+          kind = "policyDefinitionReferenceId"
+          in   = [ "AutoSetContactDetails" ]
+        }
+      ]
     }
   ]
 }

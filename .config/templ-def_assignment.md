@@ -125,20 +125,25 @@ module "org_mg_whitelist_regions" {
   }
 
   # optional resource selectors (preview)
+  # optional resource selectors (preview): typed selector contract (#8)
   resource_selectors = [
     {
       name = "SDPRegions"
-      selectors = {
-        kind = "resourceLocation"
-        in = [ "uk", "uksouth", "ukwest" ]
-      }
+      selectors = [
+        {
+          kind = "resourceLocation"
+          in   = [ "uk", "uksouth", "ukwest" ]
+        }
+      ]
     },
     {
       name = "SDPResourceTypes"
-      selectors = {
-        kind = "resourceType"
-        in = [ "Microsoft.Storage/storageAccounts", "Microsoft.EventHub/namespaces", "Microsoft.OperationalInsights/workspaces" ]
-      }
+      selectors = [
+        {
+          kind = "resourceType"
+          in   = [ "Microsoft.Storage/storageAccounts", "Microsoft.EventHub/namespaces", "Microsoft.OperationalInsights/workspaces" ]
+        }
+      ]
     }
   ]
 }
