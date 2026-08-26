@@ -51,3 +51,8 @@ output "initiative" {
     ]
   }
 }
+
+output "parameter_conflicts" {
+  description = "Map of parameter names declared by multiple member definitions with incompatible schemas to the list of declaring member references. Empty when all duplicate schemas are identical or merge_parameters is disabled."
+  value       = local.conflicting_parameters
+}

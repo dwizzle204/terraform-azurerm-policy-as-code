@@ -122,8 +122,32 @@ locals {
     }
   }
 
+  # issue #7: detect duplicate parameter names declared by multiple members.
+  # Canonicalization via jsonencode normalizes key order, so byte-identical
+  # schemas merge safely while genuinely different schemas are conflicts.
+  parameter_declarations = {
+    for entry in flatten([
+      for definition, properties in local.member_properties :
+      [
+        for parameter_name, schema in properties.parameters :
+        {
+          parameter_name = parameter_name
+          member         = definition
+          canonical      = jsonencode(schema)
+        }
+      ]
+    ]) :
+    entry.parameter_name => entry...
+  }
+
+  conflicting_parameters = {
+    for parameter_name, declarations in local.parameter_declarations :
+    parameter_name => [for d in declarations : d.member]
+    if length(declarations) > 1 && length(distinct([for d in declarations : d.canonical])) > 1
+  }
+
   # combine all discovered definition parameters using interpolation
-  parameters = merge(values({
+  parameters_raw = merge(values({
     for definition, properties in local.member_properties :
     definition => {
       for parameter_name, parameter_value in properties.parameters :
@@ -142,6 +166,16 @@ locals {
       }
     }
   })...)
+
+  # fail fast on incompatible duplicate parameter schemas when merging (#7).
+  # Both branches are JSON strings so the conditional passes cty unification;
+  # the file() sentinel raises a descriptive plan-time diagnostic naming every
+  # conflicting parameter and its declaring members.
+  parameters = jsondecode(
+    var.merge_parameters != true || length(local.conflicting_parameters) == 0 ?
+    jsonencode(local.parameters_raw) :
+    file("[ERROR] Initiative '${var.initiative_name}' has conflicting parameter schemas across member definitions: ${join("; ", [for p, members in local.conflicting_parameters : "${p}: [${join(", ", members)}]"])}. Set merge_parameters=false and supply explicit parameter mapping, or align the member schemas.")
+  )
 
   # generate replacement trigger by hashing parameters, included as an output to prevent regen at assignment
   replace_trigger = md5(jsonencode(local.parameters))
