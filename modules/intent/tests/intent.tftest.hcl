@@ -228,6 +228,7 @@ run "remediation_reachable_through_intent" {
         role_definition_ids       = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
         remediate_effects         = ["DeployIfNotExists", "Modify"]
         remediation_reference_ids = []
+        remediate                 = true
       }
     }
     initiatives = {

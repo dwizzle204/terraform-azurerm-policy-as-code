@@ -49,14 +49,14 @@ variable "assignments" {
     parameters                = optional(any) # any: Azure Policy parameter values are heterogeneous per policy schema (#13 review)
     assignment_location       = optional(string, "westeurope")
     not_scopes                = optional(list(string), [])
-    remediate                 = optional(bool, true)
+    remediate                 = optional(bool, false)
     remediate_effects         = optional(list(string), ["DeployIfNotExists", "Modify"])
     remediation_reference_ids = optional(list(string), [])
     role_definition_ids       = optional(list(string), [])
     metadata                  = optional(any) # free-form metadata passthrough (e.g. control IDs) (#13 review)
   }))
   default     = {}
-  description = "Map of logical assignment key -> intent. Scope may be a management group, subscription, resource group or resource id; the correct AzureRM assignment resource is selected automatically."
+  description = "Map of logical assignment key -> intent. Scope may be a management group, subscription, resource group or resource id; the correct AzureRM assignment resource is selected automatically. Remediation is opt-in via remediate."
   validation {
     condition = alltrue([
       for k, a in var.assignments : contains(keys(var.initiatives), a.initiative_key)
@@ -76,6 +76,7 @@ variable "exemptions" {
     category             = optional(string, "Waiver")
     expires_on           = optional(string)
     policy_reference_ids = optional(list(string), [])
+    metadata             = optional(any)
     governed = optional(object({
       owner              = string
       tracking_reference = string
