@@ -17,7 +17,7 @@ resource "null_resource" "build_machine_config_packages" {
       createGuestConfigPackage = "true"
       createGuestConfigPolicy  = "true"
       storageResourceGroupName = "cgc-cd"
-      storageAccountName       = data.azurerm_storage_container.guest_config_container.storage_account_name
+      storageAccountName       = data.azurerm_storage_account.guest_config.name
       containerName            = data.azurerm_storage_container.guest_config_container.name
 
       # the script can also publish definitions to managent groups

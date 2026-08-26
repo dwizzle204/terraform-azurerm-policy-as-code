@@ -43,6 +43,13 @@ if [ -d examples ]; then
   popd >/dev/null
 fi
 
+if [ -d examples-machine-config ]; then
+  echo "== examples-machine-config validate (backend disabled) =="
+  pushd examples-machine-config >/dev/null
+  "$TF" init -backend=false -no-color >/dev/null && "$TF" validate -no-color >/dev/null || FAILED+=("examples-machine-config:validate")
+  popd >/dev/null
+fi
+
 if [ -d examples-intent ]; then
   echo "== examples-intent validate (backend disabled) =="
   pushd examples-intent >/dev/null
@@ -329,7 +336,7 @@ popd >/dev/null
 
 echo "== negative check: unknown remediation_reference_ids fail fast (#1/#3) =="
 TMP3=$(mktemp -d)
-trap 'rm -rf "$TMP" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP8"' EXIT
+trap 'rm -rf "$TMP" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6"' EXIT
 mkdir -p "$TMP3/cfg"
 cat >"$TMP3/cfg/main.tf" <<EOF
 module "unknown_ref_assignment" {
