@@ -198,9 +198,9 @@ run "definition_metadata_passthrough" {
   variables {
     definitions = {
       member_a = {
-        category            = "Monitoring"
-        policy_name         = "deploy_vnet_diagnostic_setting"
-        metadata            = { controlIds = ["AZC-01"] }
+        category    = "Monitoring"
+        policy_name = "deploy_vnet_diagnostic_setting"
+        metadata    = { controlIds = ["AZC-01"] }
       }
       member_b = {
         category    = "Monitoring"
@@ -223,10 +223,10 @@ run "remediation_reachable_through_intent" {
     role_definition_ids_note = "set per-assignment below"
     assignments = {
       dine_remediation = {
-        initiative_key        = "platform_baseline"
-        scope                 = "/subscriptions/00000000-0000-0000-0000-000000000000"
-        role_definition_ids   = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
-        remediate_effects     = ["DeployIfNotExists", "Modify"]
+        initiative_key            = "platform_baseline"
+        scope                     = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        role_definition_ids       = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+        remediate_effects         = ["DeployIfNotExists", "Modify"]
         remediation_reference_ids = []
       }
     }
