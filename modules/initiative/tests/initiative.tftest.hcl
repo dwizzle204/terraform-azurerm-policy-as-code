@@ -1,4 +1,10 @@
-mock_provider "azurerm" {}
+mock_provider "azurerm" {
+  # explicit override for the module's Azure data source (issue #16)
+  mock_data "azurerm_subscription" {
+    defaults        = { id = "/subscriptions/00000000-0000-0000-0000-000000000000" }
+    override_during = plan
+  }
+}
 
 variables {
   initiative_name         = "initiative_contract_test"

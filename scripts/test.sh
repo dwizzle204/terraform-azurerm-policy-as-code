@@ -59,16 +59,17 @@ ARM_CLIENT_ID=00000000-0000-0000-0000-000000000000 \
 ARM_CLIENT_SECRET=dummy \
 "$TF" init -backend=false -no-color >/dev/null
 set +e
+# a bogus certificate path makes provider auth fail locally (no valid
+# credentials, no outbound token request) before the plan reports the
+# expected module error
+ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
 ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
-ARM_TENANT_ID=00000000-0000-0000-0000-000000000000 \
-ARM_CLIENT_ID=00000000-0000-0000-0000-000000000000 \
-ARM_CLIENT_SECRET=dummy \
 "$TF" plan -no-color >/dev/null 2>"$TMP/err.txt"
 RC=$?
 set -e
 if [ $RC -eq 0 ]; then
   FAILED+=("negative-check: expected plan failure for missing policy file")
-elif ! grep -qiE "(no such file|no file exists|doesn't exist|failed to read)" "$TMP/err.txt"; then
+elif ! grep -qiE "(No policy definition file found|no such file|no file exists)" "$TMP/err.txt"; then
   FAILED+=("negative-check: error did not surface a file-read message")
 else
   echo "OK: missing definition file fails the plan with a clear file error"

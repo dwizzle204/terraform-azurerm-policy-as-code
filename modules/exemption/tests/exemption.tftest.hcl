@@ -79,3 +79,27 @@ run "metadata_is_json_encoded" {
     error_message = "Metadata must be passed through in the output and JSON encoded on the exemption resource"
   }
 }
+
+run "invalid_category_fails_variable_validation" {
+  command = plan
+
+  variables {
+    exemption_category = "Invalid"
+  }
+
+  expect_failures = [
+    var.exemption_category,
+  ]
+}
+
+run "name_over_64_chars_fails_variable_validation" {
+  command = plan
+
+  variables {
+    name = join("", [for i in range(65) : "x"])
+  }
+
+  expect_failures = [
+    var.name,
+  ]
+}

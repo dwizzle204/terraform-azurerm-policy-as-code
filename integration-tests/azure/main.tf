@@ -18,19 +18,15 @@ provider "azurerm" {
 
 variable "test_subscription_id" {
   type        = string
-  description = "Disposable Azure subscription used for live testing only"
+  description = "Disposable Azure subscription used for live testing only. Pass with: terraform test -var=test_subscription_id=$ARM_SUBSCRIPTION_ID"
 }
 
+# Custom definition creation exercises real ARM / Azure Policy API acceptance.
+# Live assignment + remediation coverage requires dependent resources (e.g. a
+# Log Analytics workspace) and is intentionally out of scope for this skeleton;
+# extend it with disposable fixtures if needed.
 module "definition_live" {
   source          = "../../modules/definition"
   policy_category = "Monitoring"
   policy_name     = "deploy_vnet_diagnostic_setting"
-}
-
-module "assignment_live" {
-  source            = "../../modules/def_assignment"
-  assignment_scope  = "/subscriptions/${var.test_subscription_id}"
-  definition        = module.definition_live.definition
-  assignment_effect = "Audit"
-  skip_remediation  = true
 }

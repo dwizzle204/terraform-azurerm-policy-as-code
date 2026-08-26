@@ -5,5 +5,8 @@ terraform {
       source  = "hashicorp/azurerm"
       version = ">= 4.12"
     }
+    azuread = {
+      source = "hashicorp/azuread"
+    }
   }
 }

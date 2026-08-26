@@ -106,7 +106,9 @@ run "skip_remediation_removes_remediation_task" {
   }
 }
 
-run "identity_and_remediation_enabled_creates_task" {
+# documents upstream behavior: remediation tasks are gated on enforcement
+# mode + managed identity, not on the member effect being DINE/Modify
+run "identity_and_enforcement_gating_creates_remediation_task" {
   command = plan
 
   variables {

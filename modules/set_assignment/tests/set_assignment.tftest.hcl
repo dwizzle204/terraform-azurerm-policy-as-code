@@ -149,3 +149,41 @@ run "assignment_effect_is_merged_into_parameters" {
     error_message = "assignment_effect must merge into parameter values alongside explicit parameters"
   }
 }
+
+run "resource_scope_selects_resource_assignment" {
+  command = plan
+
+  variables {
+    assignment_scope = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-1"
+  }
+
+  assert {
+    condition     = endswith(output.id, "virtualMachines/vm-1/providers/Microsoft.Authorization/policyAssignments/mock_initiative")
+    error_message = "A resource scope must create the resource-scoped assignment resource"
+  }
+}
+
+run "remediation_tasks_are_not_effect_filtered_upstream" {
+  # documents current upstream behavior: remediation tasks are gated on
+  # enforcement mode + managed identity, NOT on the member effect. A member
+  # with a plain Audit effect still receives a remediation task.
+  command = plan
+
+  variables {
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/audit_member"
+          reference_id         = "audit_member"
+          parameter_values     = jsonencode({ effect = { value = "Audit" } })
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 1 && output.remediation_tasks[0].policy_definition_reference_id == "audit_member"
+    error_message = "Documents upstream behavior: even Audit-effect members get remediation tasks when identity is present"
+  }
+}

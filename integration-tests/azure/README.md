@@ -7,7 +7,8 @@ Optional live-Azure suite for behavior that mocked provider tests cannot prove
 
 Only tests that require real ARM API behavior:
 
-- ARM / Azure Policy API acceptance of definition, assignment and remediation payloads
+- ARM / Azure Policy API acceptance of definition payloads (covered by the current skeleton)
+- ARM / Azure Policy API acceptance of assignment and remediation payloads (requires disposable dependent fixtures, e.g. a Log Analytics workspace — extend before adding)
 - Managed identity and RBAC propagation timing
 - Actual remediation task execution
 - Provider regressions that only appear against live Azure
@@ -27,8 +28,11 @@ export ARM_TENANT_ID="..."
 export ARM_CLIENT_ID="..."
 export ARM_CLIENT_SECRET="..."
 terraform init
-terraform test
+terraform test -var="test_subscription_id=$ARM_SUBSCRIPTION_ID"
 ```
+
+Note: `ARM_SUBSCRIPTION_ID` is not auto-wired to the `test_subscription_id`
+input variable — pass it explicitly with `-var` as shown above.
 
 ## Hygiene
 

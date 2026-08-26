@@ -10,7 +10,7 @@ opt-in integration tests touch live Azure.
 |-------|---------|-----------------|--------|
 | Static analysis | `terraform fmt -check -recursive` | No | Canonical formatting |
 | Module validation | `terraform init -backend=false && terraform validate` | No | Configuration/provider schema validity |
-| Offline contract tests | `terraform test` (per module, mocked providers) | No | Module logic: scope parsing, naming, parameter merging, remediation/identity selection, exemptions, initiative references |
+| Offline contract tests | `terraform test` (per module, mocked providers) | No | Module logic: scope parsing, naming, parameter merging, identity/enforcement-gated remediation selection, exemptions, initiative references |
 | Negative validation | `scripts/test.sh` scratch plan | No | Missing policy definition files fail with a clear file error |
 | Live integration | `terraform test` in `integration-tests/azure/` | **Yes** (disposable subscription) | ARM API acceptance, identity/RBAC propagation, real remediation |
 
@@ -51,10 +51,13 @@ and use `mock_provider "azurerm"` / `"azuread"`:
   scratch plan inside `scripts/test.sh`.
 - Mocked tests cannot prove ARM-side acceptance; that is what
   `integration-tests/azure/` is for.
+- The negative-check scratch plan in `scripts/test.sh` runs with an invalid
+  certificate path so provider auth fails locally without any outbound token
+  request or real credentials.
 
-## Bug fixes surfaced by this strategy
+## Module fixes surfaced by this strategy
 
-Writing these tests exposed and fixed two real defects:
+Writing these tests exposed and fixed three real defects:
 
 1. `set_assignment.remediation_tasks` output used a `try()` chain over
    `for_each` resource maps — maps never error when empty, so the output
@@ -64,17 +67,27 @@ Writing these tests exposed and fixed two real defects:
    (and therefore identity/RBAC/remediation) when the definition's
    `policy_rule` had no `then.details` block, because function arguments
    evaluate eagerly inside `coalescelist`. The role lookup is now null-safe.
-3. `modules/definition` swallowed missing policy files with a `"{}"`
-   fallback producing confusing downstream type errors — restored upstream's
-   intended fail-loudly behavior (see gettek/terraform-azurerm-policy-as-code#11).
+3. `modules/definition` produced a confusing downstream type error when a
+   policy file was missing. Missing-file resolution is now existence-checked:
+   runtime-only definitions (per the module README contract) still work, but
+   a missing file with no runtime `policy_rule` fails with a descriptive
+   error (restores upstream gettek/terraform-azurerm-policy-as-code#11 intent).
+
+### Documented upstream behaviors
+
+- Remediation tasks are gated on enforcement mode + managed identity, **not**
+  on member effect — even Audit-effect members receive remediation tasks
+  (`remediation_tasks_are_not_effect_filtered_upstream`).
+- In `definition`, file `metadata.version` takes precedence over
+  `var.policy_version`.
 
 ## CI mapping
 
 | Workflow | Trigger | Credentials | Purpose |
 |----------|---------|-------------|---------|
-| `tests.yml` | PRs + pushes to main | none | fmt, validate, offline module tests |
-| `ci.yml` | pushes to main only | deployment secrets | live Terraform plan/comment against the `examples` root |
-| `cd.yml`, `cd-guest-config.yml` | manual/main | deployment secrets | deployments |
+| `tests.yml` | PRs + pushes to main | none | fmt, examples validate, offline module tests |
+| `ci.yml` | pushes to main only | deployment secrets | live Terraform plan against the `examples` root |
+| `cd.yml`, `cd-machine-config.yml` | pushes/manual | deployment secrets | deployments |
 
 ## Live integration suite
 
