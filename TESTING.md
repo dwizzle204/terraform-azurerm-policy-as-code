@@ -12,7 +12,7 @@ opt-in integration tests touch live Azure.
 | Module validation | `terraform init -backend=false && terraform validate` | No | Configuration/provider schema validity |
 | Offline contract tests | `terraform test` (per module, mocked providers) | No | Module logic: scope parsing, naming, parameter merging, identity/enforcement-gated remediation selection, exemptions, initiative references |
 | Negative validation | `scripts/test.sh` scratch plan | No | Missing policy definition files fail with a clear file error |
-| Live integration | `terraform test` in `integration-tests/azure/` | **Yes** (disposable subscription) | ARM API acceptance, identity/RBAC propagation, real remediation |
+| Live integration | `terraform test` in `integration-tests/azure/` | **Yes** (disposable subscription) | ARM API acceptance of custom policy definitions (identity/RBAC propagation and real remediation require disposable fixtures — extend before adding) |
 
 ## Quick start
 

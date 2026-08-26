@@ -13,7 +13,7 @@ run "live_definition_apply" {
   }
 
   assert {
-    condition     = jsondecode(module.definition_live.metadata).category == "Monitoring"
+    condition     = module.definition_live.metadata.category == "Monitoring"
     error_message = "Live definition metadata should carry the library category"
   }
 }
