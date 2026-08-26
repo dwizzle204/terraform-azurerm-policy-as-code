@@ -79,6 +79,19 @@ variable "metadata" {
   }
 }
 
+variable "governed" {
+  type = object({
+    owner              = string
+    requester          = optional(string)
+    approver           = optional(string)
+    tracking_reference = string
+    reason             = string
+    mitigation         = optional(string)
+  })
+  default     = null
+  description = "Optional governance contract (#10). When set: Waiver exemptions REQUIRE expires_on; Mitigated exemptions REQUIRE mitigation; metadata is rendered from these fields plus a created timestamp. Omit for simple exemptions (behavior unchanged)."
+}
+
 locals {
   exemption_scope = try({
     mg       = length(regexall("(\\/managementGroups\\/)", var.scope)) > 0 ? 1 : 0,
@@ -89,7 +102,36 @@ locals {
 
   expires_on = var.expires_on != null ? "${var.expires_on}T23:00:00Z" : null
 
-  metadata = var.metadata != null ? jsonencode(var.metadata) : null
+  # governance contract checks (#10): evaluating these locals raises a
+  # descriptive sentinel error when the governed contract is violated.
+  # Future-dated expiry cannot be checked deterministically at plan time;
+  # Azure rejects past dates at apply. Format is validated here.
+  governance_checks = (
+    var.governed == null ? "ok" :
+    var.exemption_category == "Waiver" && var.expires_on == null ?
+    file("[ERROR] Governed Waiver exemptions require expires_on (yyyy-mm-dd). Set expires_on or change exemption_category.") :
+    var.exemption_category == "Mitigated" && try(var.governed.mitigation, null) == null ?
+    file("[ERROR] Governed Mitigated exemptions require governed.mitigation describing the remediation in place.") :
+    var.expires_on != null && !can(regex("^\\d{4}-\\d{2}-\\d{2}$", var.expires_on)) ?
+    file("[ERROR] expires_on must use format yyyy-mm-dd.") :
+    "ok"
+  )
+
+  governance_metadata = var.governed != null ? {
+    owner             = var.governed.owner
+    requester         = try(var.governed.requester, null)
+    approver          = try(var.governed.approver, null)
+    trackingReference = var.governed.tracking_reference
+    reason            = var.governed.reason
+    mitigation        = try(var.governed.mitigation, null)
+    created           = timestamp()
+  } : null
+
+  metadata = local.governance_checks == "ok" ? (
+    var.governed != null ?
+    jsonencode(merge(var.metadata != null && can({ for k, v in var.metadata : k => v }) ? var.metadata : {}, local.governance_metadata)) :
+    (var.metadata != null ? jsonencode(var.metadata) : null)
+  ) : "{}"
 
   # generate reference Ids when unknown, assumes the set was created with the initiative module
   policy_definition_reference_ids = var.camel_case_references == true ? [for name in var.policy_definition_reference_ids :

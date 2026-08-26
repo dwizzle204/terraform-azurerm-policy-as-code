@@ -115,3 +115,27 @@ run "malformed_metadata_fails_validation" {
     var.metadata,
   ]
 }
+
+run "governed_waiver_with_expiry_renders_governance" {
+  command = plan
+
+  variables {
+    exemption_category = "Waiver"
+    expires_on         = "2030-01-31"
+    governed = {
+      owner              = "platform-team"
+      tracking_reference = "RISK-2914"
+      reason             = "Legacy dependency incompatible with control"
+    }
+  }
+
+  assert {
+    condition     = output.governance.owner == "platform-team" && output.governance.trackingReference == "RISK-2914"
+    error_message = "Governed metadata must carry owner and tracking reference (#10)"
+  }
+
+}
+
+# sentinel failures (waiver-without-expiry, mitigated-without-mitigation) are
+# covered by the scripts/test.sh negative checks — plan-time file() errors
+# abort terraform test runs rather than failing assertions
