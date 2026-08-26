@@ -32,6 +32,15 @@ resource "terraform_data" "validate_definition_scopes" {
   }
 }
 
+resource "terraform_data" "validate_definition_scopes" {
+  lifecycle {
+    precondition {
+      condition     = length(local.definition_scope_conflicts) == 0
+      error_message = "Definitions referenced by initiatives in multiple management groups require an explicit management_group_id: ${join(", ", local.definition_scope_conflicts)}."
+    }
+  }
+}
+
 module "definitions" {
   source = "../definition"
 
