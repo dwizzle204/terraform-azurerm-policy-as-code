@@ -1,10 +1,9 @@
+# deployment pipeline - post-merge only (PR validation is handled by tests.yml)
 name: cd
 on:
   push:
     branches: [main]
-  pull_request:
-    paths:
-      - "examples"
+
   workflow_dispatch:
 
 jobs:

@@ -1,9 +1,10 @@
 terraform {
-  required_version = ">= 1.4"
+  # consumers should pin deliberately - see COMPATIBILITY.md
+  required_version = ">= 1.8"
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = ">= 4.12"
+      version = "~> 5.2"
     }
     null = {
       source  = "hashicorp/null"
