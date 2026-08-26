@@ -283,7 +283,12 @@ To successfully create role assignments, ensure the deployment account has the a
 
 ### ✅Remediation Tasks
 
-Unless you specify `skip_remediation=true`, the `*_assignment` modules will automatically create [remediation tasks](https://learn.microsoft.com/en-us/azure/governance/policy/how-to/remediate-resources) for policies containing effects of `DeployIfNotExists` and `Modify`.
+Remediation tasks are **opt-in and effect-filtered**. By default no remediation tasks are created. Enable them by:
+
+- **Intent interface** (`modules/intent`): set `remediate = true` on the assignment intent (default `false`). Optionally restrict with `remediate_effects` (defaults to `["DeployIfNotExists", "Modify"]` when remediation is enabled) or select explicit members via `remediation_reference_ids`.
+- **Direct assignment modules** (`modules/set_assignment` / `modules/def_assignment`): populate `remediate_effects` with the effects you want remediated (e.g. `["DeployIfNotExists", "Modify"]`) and ensure the assignment has an identity (via `role_definition_ids` or the initiative's roles). Members whose resolved effect is in `remediate_effects` — or that are listed in `remediation_reference_ids` — produce one remediation task per eligible reference.
+
+You can still suppress remediation with `skip_remediation = true` for assignment-only deployments, and suppress RBAC provisioning with `skip_role_assignment = true` when using a pre-authorized identity (`identity_ids` / externally managed RBAC).
 
 ### ⏱️On-demand evaluation scan
 
