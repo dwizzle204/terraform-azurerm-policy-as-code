@@ -9,9 +9,9 @@ variable "definitions" {
   validation {
     condition = alltrue([
       for k, v in var.definitions :
-      (v.file_path == null) != (v.category == null && v.policy_name == null)
+      (v.file_path == null) != (v.category == null || v.policy_name == null)
     ])
-    error_message = "Each definitions entry must set exactly one of file_path or (category + policy_name)."
+    error_message = "Each definitions entry must set exactly one of file_path or BOTH category and policy_name."
   }
 
 }
@@ -31,7 +31,7 @@ variable "initiatives" {
       for k, ini in var.initiatives :
       alltrue([for mk in ini.member_definition_keys : contains(keys(var.definitions), mk)])
     ])
-    error_message = "initiative member_definition_keys reference unknown definitions."
+    error_message = "initiative member_definition_keys reference unknown definitions: ${join(", ", flatten([for k, ini in var.initiatives : [for mk in ini.member_definition_keys : "${k} -> ${mk}" if !contains(keys(var.definitions), mk)]]))}."
   }
 
 }
@@ -55,7 +55,7 @@ variable "assignments" {
     condition = alltrue([
       for k, a in var.assignments : contains(keys(var.initiatives), a.initiative_key)
     ])
-    error_message = "assignment initiative_key references unknown initiatives."
+    error_message = "assignment initiative_key references unknown initiatives: ${join(", ", [for k, a in var.assignments : "${k} -> ${a.initiative_key}" if !contains(keys(var.initiatives), a.initiative_key)])}."
   }
 
 }
@@ -85,7 +85,7 @@ variable "exemptions" {
     condition = alltrue([
       for k, e in var.exemptions : contains(keys(var.assignments), e.assignment_key)
     ])
-    error_message = "exemption assignment_key references unknown assignments."
+    error_message = "exemption assignment_key references unknown assignments: ${join(", ", [for k, e in var.exemptions : "${k} -> ${e.assignment_key}" if !contains(keys(var.assignments), e.assignment_key)])}."
   }
 
 }
