@@ -371,3 +371,88 @@ run "collision_resistant_mg_24_char_limit" {
     error_message = "MG scope: 15-char prefix + '-' + 8-char hash = exactly 24 characters"
   }
 }
+
+# BLOCKER FIX 2: consumer-reality regression — effects exactly as produced by
+# the initiative module and the real policies library.
+
+run "consumer_reality_interpolated_effect_resolves_via_default" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    initiative = merge(var.initiative, {
+      parameters = jsondecode(file("tests/fixtures/deploy_keyvault_diagnostic_setting.json")).properties.parameters
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/deploy_keyvault_diagnostic_setting"
+          reference_id         = "deploy_keyvault_diagnostic_setting"
+          parameter_values     = jsonencode({ effect = { value = "[parameters('effect')]" } })
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 1 && output.remediation_tasks[0].policy_definition_reference_id == "deploy_keyvault_diagnostic_setting"
+    error_message = "Interpolated [parameters('effect')] must resolve to the member default (DeployIfNotExists) and create a remediation task"
+  }
+}
+
+run "library_sweep_classifies_real_policy_forms" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    # the lowercase-literal member carries its effect only in policyRule.then.effect,
+    # which is not part of the initiative reference contract -> explicitly selected
+    remediation_reference_ids = ["preview_deploy_linux_azure_monitor_vm_agent"]
+    initiative = merge(var.initiative, {
+      # merged initiative parameter schema (as produced by module.initiative)
+      parameters = jsondecode(file("tests/fixtures/deploy_keyvault_diagnostic_setting.json")).properties.parameters
+      policy_definition_reference = [
+        {
+          # interpolated form, resolves via merged schema defaultValue
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/deploy_keyvault_diagnostic_setting"
+          reference_id         = "deploy_keyvault_diagnostic_setting"
+          parameters           = jsonencode(jsondecode(file("tests/fixtures/deploy_keyvault_diagnostic_setting.json")).properties.parameters)
+          policy_rule          = jsonencode(jsondecode(file("tests/fixtures/deploy_keyvault_diagnostic_setting.json")).properties.policyRule)
+          parameter_values     = jsonencode({ effect = { value = "[parameters('effect')]" } })
+        },
+        {
+          # lowercase literal effect lives in policyRule.then.effect (not on the
+          # reference); resolved via explicit remediation_reference_ids above
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/deploy_linux_azure_monitor_vm_agent"
+          reference_id         = "preview_deploy_linux_azure_monitor_vm_agent"
+          parameters           = jsonencode(jsondecode(file("tests/fixtures/preview_deploy_linux_azure_monitor_vm_agent.json")).properties.parameters)
+          policy_rule          = jsonencode(jsondecode(file("tests/fixtures/preview_deploy_linux_azure_monitor_vm_agent.json")).properties.policyRule)
+          parameter_values     = jsonencode({})
+        },
+        {
+          # explicit literal non-remediable effect (merge_effects=false style)
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/deploy_vnet_diagnostic_setting"
+          reference_id         = "deploy_vnet_diagnostic_setting"
+          parameters           = jsonencode(jsondecode(file("tests/fixtures/deploy_vnet_diagnostic_setting.json")).properties.parameters)
+          policy_rule          = jsonencode(jsondecode(file("tests/fixtures/deploy_vnet_diagnostic_setting.json")).properties.policyRule)
+          parameter_values     = jsonencode({ effect = { value = "Audit" } })
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_selected_references) == 2 && contains(output.remediation_selected_references, "deploy_keyvault_diagnostic_setting") && contains(output.remediation_selected_references, "preview_deploy_linux_azure_monitor_vm_agent")
+    error_message = "Sweep must select interpolated-default via resolution and the rule-literal form via explicit selection, excluding the literal Audit member"
+  }
+}
+
+# FIX 6: assignment-only deployment creates zero identity/RBAC/remediation side effects
+run "assignment_only_deploys_without_rbac_or_remediation" {
+  command = plan
+
+  assert {
+    condition     = output.principal_id == null && length(output.remediation_selected_references) == 0
+    error_message = "Assignment-only deployment must have no managed identity and no remediation selections"
+  }
+}
