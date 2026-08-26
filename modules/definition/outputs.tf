@@ -37,3 +37,13 @@ output "definition" {
     policy_rule         = jsonencode(local.policy_rule)
   }
 }
+
+output "azure_definition_name" {
+  description = "The physical Azure Policy Definition resource name (logical-name prefix plus deterministic schema hash suffix, #6)"
+  value       = azurerm_policy_definition.def.name
+}
+
+output "definition_name_suffix" {
+  description = "The deterministic 8-character suffix derived from name, parameter schema and version (#6)"
+  value       = local.definition_name_suffix
+}

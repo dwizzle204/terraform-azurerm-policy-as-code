@@ -133,3 +133,14 @@ module "parameterised_test" {
 | parameters | The parameters of the Policy Definition |
 | rules | The rules of the Policy Definition |
 <!-- END_TF_DOCS -->
+
+## Migrating from random-suffixed definition names (#6)
+
+Definition names previously used a 3-character random suffix. Names are now deterministic: `<prefix>_<8-char-hash>` where the hash covers the logical policy name, merged parameter schema, and version. Identical inputs produce identical physical names across independent state backends; a parameter-schema change produces a different suffix and a safe create-before-destroy replacement.
+
+On upgrade, Terraform will see differently-named definitions and plan a destroy/create for each custom definition. Options:
+
+1. Accept the replacement during a maintenance window (`create_before_destroy` is enabled so old and new coexist briefly)
+2. State-surgery alternative: `terraform state mv azurerm_policy_definition.def.<old> ...` after manually renaming the Azure resource is NOT supported by Azure Policy (names are immutable) — prefer option 1
+
+The `random` provider requirement has been removed from this module.
