@@ -7,7 +7,7 @@ set -euo pipefail
 TF="${TF_BIN:-terraform}"
 TFLINT="${TFLINT_BIN:-tflint}"
 TMPDIR_INIT_LOG=$(mktemp)
-MODULES=(definition initiative exemption def_assignment set_assignment)
+MODULES=(definition initiative exemption def_assignment set_assignment intent)
 FAILED=()
 
 command -v "$TF" >/dev/null || { echo "terraform not found"; exit 1; }
@@ -25,7 +25,7 @@ for m in "${MODULES[@]}"; do
 done
 echo "== tflint --recursive =="
 "$TFLINT" --init --recursive >/dev/null || FAILED+=("tflint:init")
-if ! "$TFLINT" --recursive; then FAILED+=("tflint"); fi
+(cd examples-intent && "$TFLINT") || FAILED+=("tflint:examples-intent")
 
 for m in "${MODULES[@]}"; do
   echo "== module: $m =="
@@ -40,6 +40,13 @@ if [ -d examples ]; then
   echo "== examples validate (backend disabled) =="
   pushd examples >/dev/null
   "$TF" init -backend=false -no-color >/dev/null && "$TF" validate -no-color >/dev/null || FAILED+=("examples:validate")
+  popd >/dev/null
+fi
+
+if [ -d examples-intent ]; then
+  echo "== examples-intent validate (backend disabled) =="
+  pushd examples-intent >/dev/null
+  "$TF" init -backend=false -no-color >/dev/null && "$TF" validate -no-color >/dev/null || FAILED+=("examples-intent:validate")
   popd >/dev/null
 fi
 
@@ -70,7 +77,11 @@ ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
 ARM_TENANT_ID=00000000-0000-0000-0000-000000000000 \
 ARM_CLIENT_ID=00000000-0000-0000-0000-000000000000 \
 ARM_CLIENT_SECRET=dummy \
+set +e
 "$TF" init -backend=false -no-color >/dev/null
+INIT_RC=$?
+set -e
+if [ $INIT_RC -ne 0 ]; then FAILED+=("negative-check:init"); fi
 set +e
 # a bogus certificate path makes provider auth fail locally (no valid
 # credentials, no outbound token request) before the plan reports the
@@ -126,7 +137,11 @@ cp "$TMP/cfg/providers.tf" "$TMP2/cfg/providers.tf"
 pushd "$TMP2/cfg" >/dev/null
 ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
 ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
+set +e
 "$TF" init -backend=false -no-color >/dev/null
+INIT_RC=$?
+set -e
+if [ $INIT_RC -ne 0 ]; then FAILED+=("negative-check:init"); fi
 set +e
 ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
 ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
@@ -166,7 +181,11 @@ provider "azurerm" {
 }
 EOF
 pushd "$TMP4/cfg" >/dev/null
+set +e
 "$TF" init -backend=false -no-color >/dev/null
+INIT_RC=$?
+set -e
+if [ $INIT_RC -ne 0 ]; then FAILED+=("negative-check:init"); fi
 set +e
 ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
 ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
@@ -201,7 +220,11 @@ cp "$TMP/cfg/providers.tf" "$TMP5/cfg/providers.tf"
 pushd "$TMP5/cfg" >/dev/null
 ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
 ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
+set +e
 "$TF" init -backend=false -no-color >/dev/null
+INIT_RC=$?
+set -e
+if [ $INIT_RC -ne 0 ]; then FAILED+=("negative-check:init"); fi
 set +e
 ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
 ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
@@ -240,7 +263,11 @@ cp "$TMP/cfg/providers.tf" "$TMP6/cfg/providers.tf"
 pushd "$TMP6/cfg" >/dev/null
 ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
 ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
+set +e
 "$TF" init -backend=false -no-color >/dev/null
+INIT_RC=$?
+set -e
+if [ $INIT_RC -ne 0 ]; then FAILED+=("negative-check:init"); fi
 set +e
 ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
 ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
@@ -280,7 +307,11 @@ cp "$TMP/cfg/providers.tf" "$TMP7/cfg/providers.tf"
 pushd "$TMP7/cfg" >/dev/null
 ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
 ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
+set +e
 "$TF" init -backend=false -no-color >/dev/null
+INIT_RC=$?
+set -e
+if [ $INIT_RC -ne 0 ]; then FAILED+=("negative-check:init"); fi
 set +e
 ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
 ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
@@ -298,7 +329,7 @@ popd >/dev/null
 
 echo "== negative check: unknown remediation_reference_ids fail fast (#1/#3) =="
 TMP3=$(mktemp -d)
-trap 'rm -rf "$TMP" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6"' EXIT
+trap 'rm -rf "$TMP" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP8"' EXIT
 mkdir -p "$TMP3/cfg"
 cat >"$TMP3/cfg/main.tf" <<EOF
 module "unknown_ref_assignment" {
@@ -326,7 +357,11 @@ cp "$TMP/cfg/providers.tf" "$TMP3/cfg/providers.tf"
 pushd "$TMP3/cfg" >/dev/null
 ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
 ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
+set +e
 "$TF" init -backend=false -no-color >/dev/null
+INIT_RC=$?
+set -e
+if [ $INIT_RC -ne 0 ]; then FAILED+=("negative-check:init"); fi
 set +e
 ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
 ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
