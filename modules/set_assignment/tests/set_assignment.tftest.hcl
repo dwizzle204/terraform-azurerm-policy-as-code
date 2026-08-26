@@ -546,8 +546,8 @@ run "assignment_parameters_effect_overrides_default_for_remediability" {
   command = plan
 
   variables {
-    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
-    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids   = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    remediate_effects     = ["DeployIfNotExists", "Modify"]
     assignment_parameters = { effect = "Modify" }
     initiative = merge(var.initiative, {
       parameters = jsonencode({

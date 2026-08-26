@@ -23,8 +23,8 @@ data "azurerm_storage_account" "guest_config" {
 }
 
 data "azurerm_storage_container" "guest_config_container" {
-  name                = "configs"
-  storage_account_id  = data.azurerm_storage_account.guest_config.id
+  name               = "configs"
+  storage_account_id = data.azurerm_storage_account.guest_config.id
 }
 
 # Onboarding Prerequisites Initiative References:
