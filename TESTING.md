@@ -1,5 +1,7 @@
 # Testing Strategy
 
+Supported Terraform/provider versions are documented in [COMPATIBILITY.md](COMPATIBILITY.md); CI runs the offline module suite against two Terraform lines to exercise that matrix.
+
 This repository follows a layered test strategy (issue #16) so that **normal
 PR validation requires no Azure tenant or credentials**. Only explicitly
 opt-in integration tests touch live Azure.

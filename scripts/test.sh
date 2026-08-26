@@ -16,6 +16,13 @@ command -v "$TFLINT" >/dev/null || { echo "tflint not found - required for a suc
 echo "== terraform fmt -check -recursive =="
 if ! "$TF" fmt -check -recursive .; then FAILED+=("fmt"); fi
 
+echo "== provider constraint consistency (#9) =="
+RV_EXPECT='required_version = ">= 1.11"'
+AZ_EXPECT='version = ">= 4.35, < 6.0"'
+for m in "${MODULES[@]}"; do
+  grep -qF "$RV_EXPECT" "modules/$m/versions.tf" || { echo "constraint drift in modules/$m/versions.tf: missing '$RV_EXPECT'"; diff <(echo "$RV_EXPECT") <(grep required_version "modules/$m/versions.tf"); FAILED+=("constraints:$m"); }
+  grep -qF "$AZ_EXPECT" "modules/$m/versions.tf" || { echo "constraint drift in modules/$m/versions.tf: missing '$AZ_EXPECT'"; FAILED+=("constraints:$m"); }
+done
 echo "== tflint --recursive =="
 "$TFLINT" --init --recursive >/dev/null || FAILED+=("tflint:init")
 if ! "$TFLINT" --recursive; then FAILED+=("tflint"); fi

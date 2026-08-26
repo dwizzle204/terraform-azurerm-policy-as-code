@@ -1,10 +1,9 @@
+# deployment pipeline - post-merge only (PR validation is handled by tests.yml)
 name: cd
 on:
   push:
     branches: [main]
-  pull_request:
-    paths:
-      - "examples"
+
   workflow_dispatch:
 
 jobs:
@@ -23,7 +22,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: ~1.10.0
+          terraform_version: ~1.15.0
 
       - name: Terraform Init
         id: init
