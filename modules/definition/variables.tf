@@ -137,5 +137,16 @@ locals {
   policy_rule  = coalesce(var.policy_rule, try((local.policy_object).properties.policyRule, null))
 
   # manually generate the definition Id to prevent "Invalid for_each argument" on set_assignment plan/apply
+  # deterministic name suffix: identical inputs (logical name + merged
+  # parameter schema + version) always produce the same suffix, so the same
+  # logical policy resolves to the same physical Azure Policy definition name
+  # across independent state backends; a schema change produces a new suffix
+  # and therefore a safe create-before-destroy replacement (#6)
+  definition_name_suffix = substr(md5(jsonencode({
+    name       = local.policy_name
+    parameters = local.parameters
+    version    = local.version
+  })), 0, 8)
+
   definition_id = var.management_group_id != null ? "${var.management_group_id}/providers/Microsoft.Authorization/policyDefinitions/${azurerm_policy_definition.def.name}" : azurerm_policy_definition.def.id
 }

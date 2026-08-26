@@ -148,6 +148,7 @@ module org_mg_configure_az_monitor_linux_vm_initiative {
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | aad_group_remediation_object_ids | List of Azure AD Group Object Ids for the System Assigned Identity to be a member of. Omit this to use role_assignments | `list(string)` | `[]` | no |
+| collision_resistant_naming | Append a deterministic 8-character hash of (scope, initiative identity) to the assignment name so distinct logical assignments sharing a long prefix cannot collide. **Enabling this changes assignment names and forces replacement of existing assignments** | `bool` | `false` | no |
 | assignment_description | A description to use for the Policy Assignment, defaults to initiative description. Changing this forces a new resource to be created | `string` | `null` | no |
 | assignment_display_name | The policy assignment display name, defaults to initiative display_name. Changing this forces a new resource to be created | `string` | `null` | no |
 | assignment_effect | The effect of the set assignment. Useful when the initiative has multiple effects of the same type and 'merge_effects=true'. Omit this to use each definitions default effect or populate individually at 'assignment_parameters' | `string` | `null` | no |
@@ -184,3 +185,9 @@ module org_mg_configure_az_monitor_linux_vm_initiative {
 | principal_id | The Principal Id of this Policy Assignment's Managed Identity if type is SystemAssigned |
 | remediation_tasks | The Remediation Task Ids and related Policy Definition Ids |
 <!-- END_TF_DOCS -->
+
+## Migration notes
+
+### Collision-resistant assignment names (#2)
+
+`collision_resistant_naming` defaults to `false`, preserving today's truncation behavior byte-for-byte. Enabling it changes the computed assignment name, which forces replacement (destroy/create) of existing assignments — plan during a maintenance window and expect re-creation, not in-place updates. The hash covers scope + initiative identity + requested name only; cosmetic display name/description changes never affect it.

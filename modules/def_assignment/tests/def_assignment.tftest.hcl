@@ -134,3 +134,67 @@ run "assignment_effect_is_merged_into_parameters" {
     error_message = "assignment_effect must merge into parameter values alongside explicit parameters"
   }
 }
+
+# ---- #2: collision-resistant naming (opt-in) ----
+
+run "collision_resistant_names_differ_for_shared_prefixes" {
+  command = plan
+
+  variables {
+    collision_resistant_naming = true
+    assignment_scope           = "/providers/Microsoft.Management/managementGroups/preview"
+    definition                 = merge(var.definition, { name = "platform_baseline_security_initiative_rollout_a" })
+  }
+
+  assert {
+    condition     = startswith(output.assignment_name, format("%s-", substr(lower(var.definition.name), 0, 15)))
+    error_message = "Name should be the truncated lowercase prefix followed by '-' and the deterministic hash"
+  }
+
+  assert {
+    condition     = length(output.assignment_name) == 24 && can(regex("^[a-z0-9_-]{15}-[0-9a-f]{8}$", output.assignment_name))
+    error_message = "MG scope: prefix + '-' + 8-char hash must total exactly 24 characters"
+  }
+}
+
+run "collision_resistant_names_differ_between_logical_identities" {
+  command = plan
+
+  variables {
+    collision_resistant_naming = true
+    assignment_scope           = "/providers/Microsoft.Management/managementGroups/preview"
+    definition                 = merge(var.definition, { name = "platform_baseline_security_initiative_rollout_b" })
+  }
+
+  assert {
+    condition     = output.assignment_name != run.collision_resistant_names_differ_for_shared_prefixes.assignment_name
+    error_message = "Two logical identities sharing a >24 character prefix must not collide"
+  }
+}
+
+run "collision_resistant_names_stable_and_limited" {
+  command = plan
+
+  variables {
+    collision_resistant_naming = true
+    assignment_name            = "subscription_scope_collision_resistant_naming_contract_check_long_name"
+  }
+
+  assert {
+    condition     = length(output.assignment_name) <= 64 && can(regex("-[0-9a-f]{8}$", output.assignment_name))
+    error_message = "Subscription-scope names stay within limits and end in the deterministic hash"
+  }
+}
+
+run "legacy_truncation_unchanged_by_default" {
+  command = plan
+
+  variables {
+    assignment_name = "legacy_truncation_mode_is_default_and_must_remain_stable"
+  }
+
+  assert {
+    condition     = output.assignment_name == lower(substr(var.assignment_name, 0, 64))
+    error_message = "Default mode must preserve today's truncation behavior byte-for-byte"
+  }
+}
