@@ -17,3 +17,13 @@ output "role_definition_ids" {
   description = "The List of Role Definition Ids assignable to the managed identity"
   value       = local.role_definition_ids
 }
+
+output "assignment_name" {
+  description = "The Policy Assignment Name (trimmed to 24 chars at management group scope)"
+  value       = local.assignment_name
+}
+
+output "parameters" {
+  description = "The Parameter Values assigned to this Policy Assignment"
+  value       = local.parameters
+}
