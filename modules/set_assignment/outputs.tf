@@ -26,5 +26,15 @@ output "definition_references" {
 
 output "definition_reference_ids" {
   description = "The Member Definition Reference Ids"
-  value       = try(var.initiative.policy_definition_reference.*.reference_id, [])
+  value       = try([for ref in var.initiative.policy_definition_reference : ref.reference_id], [])
+}
+
+output "assignment_name" {
+  description = "The Policy Assignment Name (trimmed to 24 chars at management group scope)"
+  value       = local.assignment_name
+}
+
+output "parameters" {
+  description = "The Parameter Values assigned to this Policy Assignment"
+  value       = local.parameters
 }

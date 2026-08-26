@@ -29,3 +29,7 @@ terraform.rc
 .tst
 .tmp
 .temp
+.aislop/
+
+# agent workflow artifacts (superpowers plans/brainstorms/reviews)
+docs/superpowers/

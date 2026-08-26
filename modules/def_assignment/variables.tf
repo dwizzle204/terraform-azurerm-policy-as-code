@@ -167,10 +167,10 @@ locals {
   non_compliance_message = contains(["All", "Indexed"], try(var.definition.mode, "")) ? { content = try(coalesce(var.non_compliance_message, local.description, local.display_name, "Flagged by Policy: ${local.assignment_name}", "")) } : {}
 
   # determine if a managed identity should be created with this assignment
-  identity_type = length(try(coalescelist(var.role_definition_ids, lookup(jsondecode(var.definition.policy_rule).then.details, "roleDefinitionIds", [])), [])) > 0 ? var.identity_ids != null ? { type = "UserAssigned" } : { type = "SystemAssigned" } : {}
+  identity_type = length(try(coalescelist(var.role_definition_ids, lookup(try(jsondecode(var.definition.policy_rule).then.details, {}), "roleDefinitionIds", [])), [])) > 0 ? var.identity_ids != null ? { type = "UserAssigned" } : { type = "SystemAssigned" } : {}
 
   # try to use policy definition roles if explicit roles are omitted
-  role_definition_ids = var.skip_role_assignment == false && length(var.aad_group_remediation_object_ids) == 0 && try(values(local.identity_type)[0], "") == "SystemAssigned" ? try(coalescelist(var.role_definition_ids, lookup(jsondecode(var.definition.policy_rule).then.details, "roleDefinitionIds", [])), []) : []
+  role_definition_ids = var.skip_role_assignment == false && length(var.aad_group_remediation_object_ids) == 0 && try(values(local.identity_type)[0], "") == "SystemAssigned" ? try(coalescelist(var.role_definition_ids, lookup(try(jsondecode(var.definition.policy_rule).then.details, {}), "roleDefinitionIds", [])), []) : []
 
   # if creating role assignments also create a remediation task for policies with DeployIfNotExists and Modify effects
   create_remediation = var.assignment_enforcement_mode == true && var.skip_remediation == false && length(local.identity_type) > 0 ? 1 : 0

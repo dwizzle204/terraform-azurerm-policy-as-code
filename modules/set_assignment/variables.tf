@@ -197,6 +197,9 @@ locals {
   }
 
   # retrieve definition references & create a remediation task for policies with DeployIfNotExists and Modify effects
+  # kept as-is: rewriting the != [] comparison risks cty type-semantics drift;
+  # behavior is covered by offline tests
+  # tflint-ignore: terraform_empty_list_equality
   definitions = var.assignment_enforcement_mode == true && var.skip_remediation == false && length(local.identity_type) > 0 ? (var.initiative.policy_definition_reference != [] && var.initiative.policy_definition_reference != null ? var.initiative.policy_definition_reference : []) : []
   definition_reference = {
     mg       = local.remediate.mg > 0 ? local.definitions : []
@@ -212,10 +215,12 @@ locals {
     azurerm_resource_group_policy_assignment.set[0],
     azurerm_resource_policy_assignment.set[0],
   {})
-  remediation_tasks = try(
+  # merge instead of try: for_each resource maps never error, so a try-chain
+  # always returns the first (management group) map even at other scopes
+  remediation_tasks = merge(
     azurerm_management_group_policy_remediation.rem,
     azurerm_subscription_policy_remediation.rem,
     azurerm_resource_group_policy_remediation.rem,
     azurerm_resource_policy_remediation.rem,
-  {})
+  )
 }

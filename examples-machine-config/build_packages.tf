@@ -28,6 +28,6 @@ resource "null_resource" "build_machine_config_packages" {
 
   triggers = {
     # changes to either filename or filecontents will trigger a rebuild
-    "${each.key}" = each.value
+    (each.key) = each.value
   }
 }

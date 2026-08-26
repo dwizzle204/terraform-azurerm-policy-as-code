@@ -85,15 +85,42 @@ variable "file_path" {
 }
 
 locals {
-  # import the custom policy object from a library or specified file path
-  policy_object = jsondecode(coalesce(try(
-    file(var.file_path),
-    file("${path.cwd}/policies/${title(var.policy_category)}/${var.policy_name}.json"),
-    file("${path.root}/policies/${title(var.policy_category)}/${var.policy_name}.json"),
-    file("${path.root}/../policies/${title(var.policy_category)}/${var.policy_name}.json"),
-    file("${path.module}/../../policies/${title(var.policy_category)}/${var.policy_name}.json"),
-    "{}" # return empty object if no policy is found
-  )))
+  # import the custom policy object from a library or specified file path.
+  # Resolution is existence-checked so that fully runtime-defined policies
+  # (policy_rule/policy_parameters/policy_metadata) remain supported via the
+  # "{}" fallback, while a missing definition file with no runtime policy_rule
+  # fails loudly with a descriptive error instead of a confusing downstream
+  # type error (upstream issue gettek/terraform-azurerm-policy-as-code#11).
+  definition_source_paths = [
+    var.file_path,
+    "${path.cwd}/policies/${title(var.policy_category != null ? var.policy_category : "__unresolved__")}/${var.policy_name != null ? var.policy_name : "__unresolved__"}.json",
+    "${path.root}/policies/${title(var.policy_category != null ? var.policy_category : "__unresolved__")}/${var.policy_name != null ? var.policy_name : "__unresolved__"}.json",
+    "${path.root}/../policies/${title(var.policy_category != null ? var.policy_category : "__unresolved__")}/${var.policy_name != null ? var.policy_name : "__unresolved__"}.json",
+    "${path.module}/../../policies/${title(var.policy_category != null ? var.policy_category : "__unresolved__")}/${var.policy_name != null ? var.policy_name : "__unresolved__"}.json",
+  ]
+
+  # try() guards fileexists(null) for callers that omit var.file_path
+  # (older Terraform versions do not short-circuit logical operators)
+  definition_source_candidates = [
+    for path in local.definition_source_paths :
+    path if try(fileexists(path), false)
+  ]
+  definition_source_path = length(local.definition_source_candidates) > 0 ? local.definition_source_candidates[0] : null
+
+  definition_source_resolved = local.definition_source_path != null || var.policy_rule != null
+
+  # the raw JSON text of the resolved definition file:
+  # - resolved file      -> file contents
+  # - runtime-only       -> "{}" (attributes come from runtime inputs)
+  # - neither            -> file() on the embedded-message path raises a
+  #                         descriptive missing-file error (outside any try)
+  policy_object_json = (
+    local.definition_source_resolved ?
+    coalesce(local.definition_source_path != null ? file(local.definition_source_path) : null, "{}")
+    : file("[ERROR] No policy definition file found for '${var.policy_name != null ? var.policy_name : ""}' in category '${var.policy_category != null ? var.policy_category : ""}'. Provide var.file_path, add the file to the policies library, or supply policy_rule at runtime.")
+  )
+
+  policy_object = jsondecode(local.policy_object_json)
 
   # fallbacks
   title    = title(replace(local.policy_name, "/-|_|\\s/", " "))
