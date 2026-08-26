@@ -142,6 +142,52 @@ else
 fi
 popd >/dev/null
 
+echo "== negative check: unknown remediation_reference_ids fail fast (#1/#3) =="
+TMP3=$(mktemp -d)
+trap 'rm -rf "$TMP" "$TMP2" "$TMP3"' EXIT
+mkdir -p "$TMP3/cfg"
+cat >"$TMP3/cfg/main.tf" <<EOF
+module "unknown_ref_assignment" {
+  source           = "$PWD/modules/set_assignment"
+  assignment_scope = "/subscriptions/00000000-0000-0000-0000-000000000000"
+  remediation_reference_ids = ["nonexistent_ref"]
+
+  initiative = {
+    id                  = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policySetDefinitions/probe_initiative"
+    name                = "probe_initiative"
+    display_name        = "Probe Initiative"
+    description         = "Probe"
+    management_group_id = null
+    parameters          = {}
+    metadata            = jsonencode({ category = "Probe" })
+    role_definition_ids = []
+    replace_trigger     = "abc"
+    policy_definition_reference = [
+      { policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/m1", reference_id = "real_member", parameter_values = jsonencode({ effect = { value = "DeployIfNotExists" } }) }
+    ]
+  }
+}
+EOF
+cp "$TMP/cfg/providers.tf" "$TMP3/cfg/providers.tf"
+pushd "$TMP3/cfg" >/dev/null
+ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
+ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
+"$TF" init -backend=false -no-color >/dev/null
+set +e
+ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
+ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
+"$TF" plan -no-color >/dev/null 2>"$TMP3/err.txt"
+RC=$?
+set -e
+if [ $RC -eq 0 ]; then
+  FAILED+=("negative-check-refids: expected plan failure for unknown remediation reference ids")
+elif ! grep -qi "are not valid member references" "$TMP3/err.txt"; then
+  FAILED+=("negative-check-refids: error did not surface the unknown-reference diagnostic")
+else
+  echo "OK: unknown remediation reference ids fail the plan with a clear diagnostic"
+fi
+popd >/dev/null
+
 if [ ${#FAILED[@]} -gt 0 ]; then
   echo "FAILED: ${FAILED[*]}"
   exit 1
