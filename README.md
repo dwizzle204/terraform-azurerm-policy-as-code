@@ -390,3 +390,4 @@ To trigger an on-demand [compliance scan](https://learn.microsoft.com/en-us/azur
 | Policy definition, initiative, or assignment request body | Bytes                            | 1,048,576     |
 
 Policy rules have additional limits to the number of conditions and their complexity. See [Policy rule limits](https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/governance/policy/concepts/definition-structure-policy-rule.md#policy-rule-limits) for more information.
+
