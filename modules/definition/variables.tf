@@ -147,8 +147,7 @@ locals {
   description  = coalesce(var.policy_description, try((local.policy_object).properties.description, local.title))
   metadata     = coalesce(null, var.policy_metadata, try((local.policy_object).properties.metadata, merge({ category = local.category }, { version = local.version })))
   parameters   = coalesce(null, var.policy_parameters, try((local.policy_object).properties.parameters, {}))
-  # try(): invalid shapes already fail var.policy_rule validation
-  policy_rule = try(coalesce(var.policy_rule, try((local.policy_object).properties.policyRule, null)), null)
+  policy_rule  = coalesce(var.policy_rule, try((local.policy_object).properties.policyRule, null))
 
   # manually generate the definition Id to prevent "Invalid for_each argument" on set_assignment plan/apply
   # deterministic name suffix: identical inputs (logical name + merged
