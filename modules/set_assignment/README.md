@@ -206,7 +206,7 @@ Remediation is **opt-in and effect-aware**:
 | Input | Meaning |
 |-------|---------|
 | `remediate_effects` | Member effects eligible for remediation tasks. Default `[]` (disabled). Only `DeployIfNotExists` / `Modify` are valid |
-| `remediation_reference_ids` | Explicit member reference ids to remediate regardless of resolved effect; unknown ids fail the plan |
+| `remediation_reference_ids` | Explicit member reference ids to remediate when the resolved effect is unresolved (empty). Known non-remediable effects remain rejected even when explicitly listed; unknown ids fail the plan |
 | `skip_remediation` | Master switch; suppresses all remediation regardless of the above |
 
 Per-member effect resolution reads the member's `parameter_values.effect.value`.

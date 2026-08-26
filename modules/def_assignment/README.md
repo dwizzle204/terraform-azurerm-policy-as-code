@@ -229,7 +229,7 @@ Enabling `collision_resistant_naming` changes the computed assignment name, forc
 Remediation is **opt-in and effect-aware**: the effective effect is the
 `assignment_effect` override or the policy rule's `then.effect`, matched against
 `remediate_effects` (default `[]` = disabled). `remediation_reference_ids`
-explicitly selects this definition by name regardless of effect. Module-managed
+explicitly selects this definition by name when the resolved effect is unresolved (empty). Known non-remediable effects remain rejected even when explicitly listed. Module-managed
 role assignments now run before remediation tasks (`depends_on`). See
 `modules/set_assignment/README.md` for the privilege table and externally
 managed identity/RBAC patterns. Migration: set

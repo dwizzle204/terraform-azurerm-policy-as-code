@@ -595,3 +595,30 @@ run "unresolvable_effect_is_classified_not_remediable" {
     error_message = "Explicit references may select members whose effect cannot be resolved"
   }
 }
+
+run "assignment_effect_override_makes_audit_member_eligible" {
+  command = plan
+
+  variables {
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    assignment_effect   = "Modify"
+    initiative = merge(var.initiative, {
+      parameters = jsonencode({
+        effect = { type = "String", defaultValue = "Audit" }
+      })
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/member_with_audit_default"
+          reference_id         = "member_with_audit_default"
+          parameter_values     = jsonencode({ effect = { value = "[parameters('effect')]" } })
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = contains(output.remediation_selected_references, "member_with_audit_default")
+    error_message = "assignment_effect = Modify should make an Audit-default member eligible for remediation"
+  }
+}
