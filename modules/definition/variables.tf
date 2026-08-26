@@ -99,9 +99,11 @@ locals {
     "${path.module}/../../policies/${title(var.policy_category != null ? var.policy_category : "__unresolved__")}/${var.policy_name != null ? var.policy_name : "__unresolved__"}.json",
   ]
 
+  # try() guards fileexists(null) for callers that omit var.file_path
+  # (older Terraform versions do not short-circuit logical operators)
   definition_source_candidates = [
     for path in local.definition_source_paths :
-    path if path != null && fileexists(path)
+    path if try(fileexists(path), false)
   ]
   definition_source_path = length(local.definition_source_candidates) > 0 ? local.definition_source_candidates[0] : null
 
