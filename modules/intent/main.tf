@@ -16,10 +16,10 @@ locals {
     ])) > 1
   ]
   definition_management_group = {
-    for k, v in var.definitions : k => coalesce(
+    for k, v in var.definitions : k => try(coalesce(
       v.management_group_id,
       try([for ini in var.initiatives : ini.management_group_id if ini.management_group_id != null && contains(ini.member_definition_keys, k)][0], null)
-    )
+    ), null)
   }
 }
 

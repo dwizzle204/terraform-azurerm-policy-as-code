@@ -220,7 +220,6 @@ run "remediation_reachable_through_intent" {
   command = plan
 
   variables {
-    role_definition_ids_note = "set per-assignment below"
     assignments = {
       dine_remediation = {
         initiative_key            = "platform_baseline"
@@ -247,6 +246,24 @@ run "remediation_reachable_through_intent" {
   assert {
     condition     = length(output.assignment_remediation_references["dine_remediation"]) > 0
     error_message = "Remediation tasks must be reachable through the intent wrapper when remediate=true and effects match (#13 review P1)"
+  }
+}
+
+run "subscription_only_definitions_resolve_without_error" {
+  command = plan
+
+  variables {
+    definitions = {
+      standalone = { category = "Monitoring", policy_name = "deploy_vnet_diagnostic_setting" }
+    }
+    initiatives = {}
+    assignments = {}
+    exemptions  = {}
+  }
+
+  assert {
+    condition     = length(output.definition_ids) == 1 && output.definition_details["standalone"].management_group_id == null
+    error_message = "Subscription-only/unreferenced definitions must resolve with null management_group_id (regression for coalesce fix)"
   }
 }
 
