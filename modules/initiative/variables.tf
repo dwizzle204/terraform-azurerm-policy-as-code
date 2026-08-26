@@ -48,14 +48,31 @@ variable "initiative_version" {
 }
 
 variable "member_definitions" {
-  type        = any
-  description = "Policy Definition resource nodes that will be members of this initiative"
+  description = "Policy Definition resource nodes that will be members of this initiative (matches the definition module's `definition` output)"
+  type = list(object({
+    id                  = string
+    name                = string
+    display_name        = optional(string)
+    description         = optional(string)
+    mode                = optional(string)
+    management_group_id = optional(string)
+    metadata            = optional(string)
+    parameters          = optional(string)
+    policy_rule         = optional(string)
+    version             = optional(string)
+  }))
 }
 
 variable "initiative_metadata" {
+  # any: mirrors Azure Policy free-form metadata
   type        = any
   description = "The metadata for the policy initiative. This is a JSON object representing additional metadata that should be stored with the policy initiative. Omitting this will default to merge var.initiative_category and var.initiative_version"
   default     = null
+
+  validation {
+    condition     = var.initiative_metadata == null || can({ for k, v in var.initiative_metadata : k => v }) || can(tostring(var.initiative_metadata))
+    error_message = "initiative_metadata must be an object or a JSON-encoded string."
+  }
 }
 
 variable "merge_effects" {
@@ -94,14 +111,24 @@ locals {
   member_properties = {
     for idx, d in var.member_definitions :
     var.duplicate_members == false ? d.name : "${idx}_${d.name}" => {
-      id                     = d.id
-      mode                   = try(d.mode, "")
-      reference              = var.duplicate_members == false ? (var.use_display_name_for_references == false ? d.name : d.display_name) : (var.use_display_name_for_references == false ? "${idx}_${d.name}" : "${idx}_${d.display_name}")
-      parameters             = try(jsondecode(d.parameters), {})
-      category               = try(jsondecode(d.metadata).category, "")
-      version                = replace(try(d.version, jsondecode(d.metadata).version, "1.*"), "/^([0-9]+\\.[0-9]+)\\.[0-9]+(-preview)?$/", "$1.*$2")
-      non_compliance_message = try(jsondecode(d.metadata).non_compliance_message, d.description, d.display_name, "Flagged by Policy: ${d.name}")
-      role_definition_ids    = try(jsondecode(d.policy_rule).then.details.roleDefinitionIds, [])
+      id   = d.id
+      mode = try(d.mode, "")
+      reference = var.duplicate_members == false ? (
+        var.use_display_name_for_references == false ? d.name : coalesce(d.display_name, d.name)
+        ) : (
+        var.use_display_name_for_references == false ? "${idx}_${d.name}" : "${idx}_${coalesce(d.display_name, d.name)}"
+      )
+      parameters = try(jsondecode(d.parameters), {})
+      category   = try(jsondecode(d.metadata).category, "")
+      # optional attrs yield null (not an error) once member_definitions is
+      # fully typed, so null-guard instead of relying on try() fallthrough
+      version = replace(d.version != null ? d.version : try(jsondecode(d.metadata).version, "1.*"), "/^([0-9]+\\.[0-9]+)\\.[0-9]+(-preview)?$/", "$1.*$2")
+      non_compliance_message = coalesce(
+        try(jsondecode(d.metadata).non_compliance_message, null),
+        d.description, d.display_name,
+        "Flagged by Policy: ${d.name}"
+      )
+      role_definition_ids = try(jsondecode(d.policy_rule).then.details.roleDefinitionIds, [])
     }
   }
 

@@ -64,22 +64,35 @@ variable "policy_rule" {
   type        = any
   description = "The policy rule for the policy definition. This is a JSON object representing the rule that contains an if and a then block. Omitting this assumes the rules are located in the policy file"
   default     = null
+  validation {
+    condition     = var.policy_rule == null || can({ for k, v in var.policy_rule : k => v }) || can(tostring(var.policy_rule))
+    error_message = "policy_rule must be an object (policyRule) or a JSON-encoded string."
+  }
 }
 
 variable "policy_parameters" {
   type        = any
   description = "Parameters for the policy definition. This field is a JSON object representing the parameters of your policy definition. Omitting this assumes the parameters are located in the policy file"
   default     = null
+  validation {
+    condition     = var.policy_parameters == null || can({ for k, v in var.policy_parameters : k => v }) || can(tostring(var.policy_parameters))
+    error_message = "policy_parameters must be an object (parameters schema) or a JSON-encoded string."
+  }
 }
 
 variable "policy_metadata" {
   type        = any
   description = "The metadata for the policy definition. This is a JSON object representing additional metadata that should be stored with the policy definition. Omitting this will fallback to meta in the definition or merge var.policy_category and var.policy_version"
   default     = null
+  validation {
+    condition     = var.policy_metadata == null || can({ for k, v in var.policy_metadata : k => v }) || can(tostring(var.policy_metadata))
+    error_message = "policy_metadata must be an object or a JSON-encoded string."
+  }
 }
 
 variable "file_path" {
-  type        = any
+  # typed: resolves via file(); see definition_source_paths
+  type        = string
   description = "The filepath to the custom policy. Omitting this assumes the policy is located in the module library"
   default     = null
 }
