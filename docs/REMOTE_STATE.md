@@ -37,7 +37,7 @@ narrower RBAC per team, faster plans. Do not create one state per policy —
 that inverts into unmanageable sprawl.
 
 With this repository's modules, the split works naturally: exemptions take an
-`assignment_id` input, so the exemptions state only needs read access to IDs
+`policy_assignment_id` input, so the exemptions state only needs read access to IDs
 produced by the core state (pass them as variables from pipeline output).
 
 ## Naming conventions
