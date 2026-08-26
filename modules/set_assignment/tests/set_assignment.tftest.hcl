@@ -224,6 +224,15 @@ run "collision_resistant_names_differ_between_logical_identities" {
   }
 }
 
+run "collision_resistant_names_stable_baseline" {
+  command = plan
+
+  variables {
+    collision_resistant_naming = true
+  }
+}
+
+# literal cross-run equality: identical inputs must produce the identical name
 run "collision_resistant_names_stable" {
   command = plan
 
@@ -232,8 +241,13 @@ run "collision_resistant_names_stable" {
   }
 
   assert {
-    condition     = endswith(output.assignment_name, "-") == false && length(output.assignment_name) <= 64
-    error_message = "Subscription-scope collision-resistant names are stable and within limits (stability across runs asserted by identical re-run of this file)"
+    condition     = output.assignment_name == run.collision_resistant_names_stable_baseline.assignment_name
+    error_message = "Identical inputs must produce the identical collision-resistant assignment name across runs"
+  }
+
+  assert {
+    condition     = length(output.assignment_name) <= 64
+    error_message = "Subscription-scope collision-resistant names stay within the 64-char Azure limit"
   }
 }
 

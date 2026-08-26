@@ -104,7 +104,6 @@ module "parameterised_test" {
 | Name | Type |
 |------|------|
 | [azurerm_policy_definition.def](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/policy_definition) | resource |
-| [random_string.set_replace](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/string) | resource |
 
 ## Inputs
 
@@ -144,3 +143,8 @@ On upgrade, Terraform will see differently-named definitions and plan a destroy/
 2. State-surgery alternative: `terraform state mv azurerm_policy_definition.def.<old> ...` after manually renaming the Azure resource is NOT supported by Azure Policy (names are immutable) — prefer option 1
 
 The `random` provider requirement has been removed from this module.
+
+> **Note:** the suffix hash covers `policy_parameters` in whatever form it is
+> supplied — a JSON *string* and an equivalent decoded *object* produce
+> different suffixes despite identical logical schemas. Pick one form per
+> policy and keep it stable until parameter inputs are fully typed (#4).
