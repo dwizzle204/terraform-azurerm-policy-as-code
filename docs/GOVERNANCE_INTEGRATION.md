@@ -14,8 +14,9 @@ matter (effects, parameters, resource selectors, remediation behavior).
 
 ## Metadata pattern
 
-Every module exposes a free-form `metadata` input (`definition`,
-`initiative`, `set_assignment`/`def_assignment`, `exemption`). Render catalog
+Every module exposes a free-form metadata input — `policy_metadata`
+(definition), `initiative_metadata` (initiative), `assignment_metadata`
+(set_assignment/def_assignment), and `metadata` (exemption). Render catalog
 fields into it consistently:
 
 ```hcl
