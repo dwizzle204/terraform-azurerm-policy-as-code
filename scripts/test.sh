@@ -43,6 +43,13 @@ if [ -d examples ]; then
   popd >/dev/null
 fi
 
+if [ -d examples-machine-config ]; then
+  echo "== examples-machine-config validate (backend disabled) =="
+  pushd examples-machine-config >/dev/null
+  "$TF" init -backend=false -no-color >/dev/null && "$TF" validate -no-color >/dev/null || FAILED+=("examples-machine-config:validate")
+  popd >/dev/null
+fi
+
 if [ -d examples-intent ]; then
   echo "== examples-intent validate (backend disabled) =="
   pushd examples-intent >/dev/null

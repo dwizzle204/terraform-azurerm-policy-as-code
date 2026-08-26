@@ -15,10 +15,16 @@ data "azurerm_role_definition" "contributor" {
   name = "Contributor"
 }
 
-# storage container to hold custom dsc packages
+# storage account + container holding custom dsc packages
+# (AzureRM >= 5: containers are addressed via storage_account_id)
+data "azurerm_storage_account" "guest_config" {
+  name                = "guestconfig${substr(md5(data.azurerm_client_config.current.subscription_id), 0, 5)}"
+  resource_group_name = "cgc-cd"
+}
+
 data "azurerm_storage_container" "guest_config_container" {
-  name                 = "configs"
-  storage_account_name = "guestconfig${substr(md5(data.azurerm_client_config.current.subscription_id), 0, 5)}"
+  name                = "configs"
+  storage_account_id  = data.azurerm_storage_account.guest_config.id
 }
 
 # Onboarding Prerequisites Initiative References:
