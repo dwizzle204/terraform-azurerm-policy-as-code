@@ -110,3 +110,90 @@ run "duplicate_members_are_indexed" {
     error_message = "Duplicate members should be prefixed with their index"
   }
 }
+
+run "identical_duplicate_parameter_schemas_merge" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/providers/Microsoft.Authorization/policyDefinitions/twin_a"
+        name         = "twin_a"
+        display_name = "Twin A"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring" })
+        parameters = jsonencode({
+          sharedParam = { type = "String", defaultValue = "same", metadata = { displayName = "Shared" } }
+          uniqueA     = { type = "String", defaultValue = "a" }
+        })
+        policy_rule = jsonencode({ if = {}, then = {} })
+      },
+      {
+        id           = "/providers/Microsoft.Authorization/policyDefinitions/twin_b"
+        name         = "twin_b"
+        display_name = "Twin B"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring" })
+        parameters = jsonencode({
+          sharedParam = { type = "String", defaultValue = "same", metadata = { displayName = "Shared" } }
+          uniqueB     = { type = "String", defaultValue = "b" }
+        })
+        policy_rule = jsonencode({ if = {}, then = {} })
+      }
+    ]
+  }
+
+  assert {
+    condition     = output.parameter_conflicts == {}
+    error_message = "Byte-identical duplicate schemas must not be flagged as conflicts"
+  }
+
+  assert {
+    condition     = contains(keys(output.parameters), "sharedParam") && !contains(keys(output.parameters), "uniqueA_sharedParam")
+    error_message = "Identical duplicate schemas should merge into a single shared parameter entry"
+  }
+}
+
+run "conflicting_schemas_reported_and_escape_hatch_works" {
+  # escape hatch documented in #7: merge_parameters=false disables merging and
+  # the hard failure, while detection stays visible via parameter_conflicts
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/providers/Microsoft.Authorization/policyDefinitions/conflict_a"
+        name         = "conflict_a"
+        display_name = "Conflict A"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring" })
+        parameters = jsonencode({
+          sharedParam = { type = "String", defaultValue = "alpha", metadata = { displayName = "Shared" } }
+        })
+        policy_rule = jsonencode({ if = {}, then = {} })
+      },
+      {
+        id           = "/providers/Microsoft.Authorization/policyDefinitions/conflict_b"
+        name         = "conflict_b"
+        display_name = "Conflict B"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring" })
+        parameters = jsonencode({
+          sharedParam = { type = "String", defaultValue = "beta", metadata = { displayName = "Shared" } }
+        })
+        policy_rule = jsonencode({ if = {}, then = {} })
+      }
+    ]
+    merge_parameters = false
+  }
+
+  assert {
+    condition     = length(output.parameter_conflicts) == 1 && contains(keys(output.parameter_conflicts), "sharedParam")
+    error_message = "Conflicting duplicate schemas must be reported with the parameter name as key"
+  }
+
+  assert {
+    condition     = contains(output.parameter_conflicts["sharedParam"], "conflict_a") && contains(output.parameter_conflicts["sharedParam"], "conflict_b")
+    error_message = "The conflict diagnostic must identify every declaring member definition"
+  }
+}

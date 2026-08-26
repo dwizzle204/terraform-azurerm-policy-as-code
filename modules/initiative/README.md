@@ -151,3 +151,17 @@ module guest_config_prereqs_initiative {
 | parameters | The combined parameters of the Policy Set Definition |
 | role_definition_ids | Role definition IDs for remediation |
 <!-- END_TF_DOCS -->
+## Parameter merge conflict detection (#7)
+
+When `merge_parameters = true` (default), member definitions may declare the
+same parameter name. Schemas are canonicalized and compared:
+
+- **Identical duplicate schemas** merge silently into one initiative parameter.
+- **Incompatible duplicates** (different type, default, allowed values, etc.)
+  fail the plan with a diagnostic naming every conflicting parameter and its
+  declaring members, e.g.:
+  `[ERROR] Initiative 'platform_baseline' has conflicting parameter schemas across member definitions: retentionDays: [policy_a, policy_b]. Set merge_parameters=false and supply explicit parameter mapping, or align the member schemas.`
+
+Escape hatch: set `merge_parameters = false` to disable merging (parameters
+are suffixed per member reference) — conflicts are then reported non-fatally
+via the `parameter_conflicts` output for governance review.

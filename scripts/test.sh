@@ -89,6 +89,59 @@ else
 fi
 popd >/dev/null
 
+echo "== negative check: initiative parameter merge conflicts fail fast (#7) =="
+TMP2=$(mktemp -d)
+trap 'rm -rf "$TMP" "$TMP2"' EXIT
+mkdir -p "$TMP2/cfg"
+cat >"$TMP2/cfg/main.tf" <<EOF
+module "conflicting_initiative" {
+  source                  = "$PWD/modules/initiative"
+  initiative_name         = "conflict_probe"
+  initiative_display_name = "Conflict Probe"
+  management_group_id     = "/providers/Microsoft.Management/managementGroups/probe"
+
+  member_definitions = [
+    {
+      id           = "/providers/Microsoft.Authorization/policyDefinitions/conflict_a"
+      name         = "conflict_a"
+      display_name = "Conflict A"
+      mode         = "All"
+      metadata     = jsonencode({ category = "Monitoring" })
+      parameters   = jsonencode({ sharedParam = { type = "String", defaultValue = "alpha", metadata = { displayName = "Shared" } } })
+      policy_rule  = jsonencode({ if = {}, then = {} })
+    },
+    {
+      id           = "/providers/Microsoft.Authorization/policyDefinitions/conflict_b"
+      name         = "conflict_b"
+      display_name = "Conflict B"
+      mode         = "All"
+      metadata     = jsonencode({ category = "Monitoring" })
+      parameters   = jsonencode({ sharedParam = { type = "String", defaultValue = "beta", metadata = { displayName = "Shared" } } })
+      policy_rule  = jsonencode({ if = {}, then = {} })
+    }
+  ]
+}
+EOF
+cp "$TMP/cfg/providers.tf" "$TMP2/cfg/providers.tf"
+pushd "$TMP2/cfg" >/dev/null
+ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
+ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
+"$TF" init -backend=false -no-color >/dev/null
+set +e
+ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
+ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
+"$TF" plan -no-color >/dev/null 2>"$TMP2/err.txt"
+RC=$?
+set -e
+if [ $RC -eq 0 ]; then
+  FAILED+=("negative-check-params: expected plan failure for conflicting parameter schemas")
+elif ! grep -qi "conflicting parameter schemas" "$TMP2/err.txt"; then
+  FAILED+=("negative-check-params: error did not surface the conflict diagnostic")
+else
+  echo "OK: incompatible initiative parameter schemas fail the plan with a clear diagnostic"
+fi
+popd >/dev/null
+
 if [ ${#FAILED[@]} -gt 0 ]; then
   echo "FAILED: ${FAILED[*]}"
   exit 1
