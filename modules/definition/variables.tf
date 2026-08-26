@@ -88,6 +88,7 @@ variable "policy_metadata" {
     condition     = var.policy_metadata == null || (can({ for k, v in var.policy_metadata : k => v }) && !can(tolist(var.policy_metadata))) || can(tostring(var.policy_metadata))
     error_message = "policy_metadata must be an object or a JSON-encoded string."
   }
+  # (list exclusion kept consistent with sibling validations below)
 }
 
 variable "file_path" {
@@ -145,9 +146,19 @@ locals {
   policy_name  = coalesce(var.policy_name, try((local.policy_object).name, null))
   display_name = coalesce(var.display_name, try((local.policy_object).properties.displayName, local.title))
   description  = coalesce(var.policy_description, try((local.policy_object).properties.description, local.title))
-  metadata     = coalesce(null, var.policy_metadata, try((local.policy_object).properties.metadata, merge({ category = local.category }, { version = local.version })))
-  parameters   = coalesce(null, var.policy_parameters, try((local.policy_object).properties.parameters, {}))
-  policy_rule  = coalesce(var.policy_rule, try((local.policy_object).properties.policyRule, null))
+  metadata     = local.metadata_canonical
+  parameters   = local.parameters_canonical
+  policy_rule  = local.policy_rule_canonical
+
+  # normalize JSON-string inputs to decoded objects so the resource boundary
+  # jsonencode() never produces a double-encoded payload (#4)
+  metadata_canonical    = try(jsondecode(local.metadata_raw), local.metadata_raw)
+  parameters_canonical  = try(jsondecode(local.parameters_raw), local.parameters_raw)
+  policy_rule_canonical = try(jsondecode(local.policy_rule_raw), local.policy_rule_raw)
+
+  metadata_raw    = coalesce(null, var.policy_metadata, try((local.policy_object).properties.metadata, merge({ category = local.category }, { version = local.version })))
+  parameters_raw  = coalesce(null, var.policy_parameters, try((local.policy_object).properties.parameters, {}))
+  policy_rule_raw = coalesce(var.policy_rule, try((local.policy_object).properties.policyRule, null))
 
   # manually generate the definition Id to prevent "Invalid for_each argument" on set_assignment plan/apply
   # deterministic name suffix: identical inputs (logical name + merged

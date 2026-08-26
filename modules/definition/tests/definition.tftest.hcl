@@ -86,12 +86,12 @@ run "runtime_only_definition_without_file" {
   }
 
   assert {
-    condition     = jsondecode(output.rules).then.effect == "audit"
-    error_message = "Fully runtime-defined policies (no library file) must remain supported per the module README contract"
+    condition     = output.rules.then.effect == "audit"
+    error_message = "Fully runtime-defined policies remain supported; string-form inputs are normalized to objects (#4)"
   }
 
   assert {
-    condition     = jsondecode(output.metadata).category == "Custom Category"
+    condition     = output.metadata.category == "Custom Category"
     error_message = "Runtime metadata should be used when no file resolves"
   }
 }

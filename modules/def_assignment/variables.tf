@@ -203,7 +203,8 @@ locals {
   ) : try(lower(substr(coalesce(var.assignment_name, var.definition.name), 0, local.assignment_name_trim)), "")
   display_name = try(coalesce(var.assignment_display_name, var.definition.display_name), "")
   description  = try(coalesce(var.assignment_description, var.definition.description), "")
-  metadata     = jsonencode(try(coalesce(var.assignment_metadata, jsondecode(var.definition.metadata)), {}))
+  # normalize JSON-string input so the boundary jsonencode() never double-encodes (#4)
+  metadata = jsonencode(try(jsondecode(try(coalesce(var.assignment_metadata, jsondecode(var.definition.metadata)), {})), try(coalesce(var.assignment_metadata, jsondecode(var.definition.metadata)), {})))
 
   # convert assignment parameters to the required assignment structure
   parameter_values = var.assignment_parameters != null ? {

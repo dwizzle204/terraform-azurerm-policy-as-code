@@ -213,7 +213,9 @@ locals {
     k => v.role_definition_ids
   })) : lower(v)]), [])
 
-  metadata = coalesce(null, var.initiative_metadata, merge({ category = var.initiative_category }, { version = var.initiative_version }))
+  # normalize JSON-string input so the resource boundary jsonencode() never
+  # double-encodes (#4)
+  metadata = try(jsondecode(coalesce(null, var.initiative_metadata, merge({ category = var.initiative_category }, { version = var.initiative_version }))), coalesce(null, var.initiative_metadata, merge({ category = var.initiative_category }, { version = var.initiative_version })))
 
   # build non-compliance messages from metadata, or default to description/display_name if not present
   non_compliance_messages = merge(

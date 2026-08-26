@@ -217,7 +217,8 @@ locals {
   ) : try(lower(substr(coalesce(var.assignment_name, var.initiative.name), 0, local.assignment_name_trim)), "")
   display_name = try(coalesce(var.assignment_display_name, var.initiative.display_name), "")
   description  = try(coalesce(var.assignment_description, var.initiative.description), "")
-  metadata     = jsonencode(try(coalesce(var.assignment_metadata, jsondecode(var.initiative.metadata)), {}))
+  # normalize JSON-string input so the boundary jsonencode() never double-encodes (#4)
+  metadata = jsonencode(try(jsondecode(try(coalesce(var.assignment_metadata, jsondecode(var.initiative.metadata)), {})), try(coalesce(var.assignment_metadata, jsondecode(var.initiative.metadata)), {})))
 
   # convert assignment parameters to the required assignment structure
   parameter_values = var.assignment_parameters != null ? {
