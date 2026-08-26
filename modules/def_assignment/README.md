@@ -210,3 +210,11 @@ module "org_mg_whitelist_regions" {
 | remediation_id | The Id of the remediation task |
 | role_definition_ids | The List of Role Definition Ids assignable to the managed identity |
 <!-- END_TF_DOCS -->
+
+## Collision-resistant assignment names (#2)
+
+Set `collision_resistant_naming = true` to append a deterministic 8-character hash of (assignment scope, member definition identity, requested name) to the assignment name, preventing collisions between distinct logical assignments whose names share a long prefix. Management-group assignments remain within the 24-character Azure limit. Defaults to `false`; enabling it renames existing assignments and forces replacement.
+
+## Migration notes
+
+Enabling `collision_resistant_naming` changes the computed assignment name, forcing destroy/create replacement of existing assignments. Plan during a maintenance window.

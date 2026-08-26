@@ -187,3 +187,80 @@ run "remediation_tasks_are_not_effect_filtered_upstream" {
     error_message = "Documents upstream behavior: even Audit-effect members get remediation tasks when identity is present"
   }
 }
+
+# ---- #2: collision-resistant naming (opt-in) ----
+
+run "collision_resistant_names_differ_for_shared_prefixes" {
+  command = plan
+
+  variables {
+    collision_resistant_naming = true
+    assignment_scope           = "/providers/Microsoft.Management/managementGroups/preview"
+    assignment_name            = "platform_baseline_security_initiative_rollout_a"
+  }
+
+  assert {
+    condition     = startswith(output.assignment_name, format("%s-", substr(lower(var.assignment_name), 0, 15)))
+    error_message = "Name should be the truncated lowercase prefix followed by '-' and the deterministic hash"
+  }
+
+  assert {
+    condition     = length(output.assignment_name) <= 24
+    error_message = "MG-scope names must stay within the 24 character Azure limit in collision-resistant mode"
+  }
+}
+
+run "collision_resistant_names_differ_between_logical_identities" {
+  command = plan
+
+  variables {
+    collision_resistant_naming = true
+    initiative                 = merge(var.initiative, { name = "platform_baseline_security_initiative_rollout_b" })
+  }
+
+  assert {
+    condition     = output.assignment_name != run.collision_resistant_names_differ_for_shared_prefixes.assignment_name
+    error_message = "Two logical identities sharing a >24 character prefix must not collide"
+  }
+}
+
+run "collision_resistant_names_stable" {
+  command = plan
+
+  variables {
+    collision_resistant_naming = true
+  }
+
+  assert {
+    condition     = endswith(output.assignment_name, "-") == false && length(output.assignment_name) <= 64
+    error_message = "Subscription-scope collision-resistant names are stable and within limits (stability across runs asserted by identical re-run of this file)"
+  }
+}
+
+run "legacy_truncation_unchanged_by_default" {
+  command = plan
+
+  variables {
+    assignment_name = "legacy_truncation_mode_is_default_and_must_remain_stable"
+  }
+
+  assert {
+    condition     = output.assignment_name == lower(substr(var.assignment_name, 0, 64))
+    error_message = "Default mode must preserve today's truncation behavior byte-for-byte"
+  }
+}
+
+run "collision_resistant_mg_24_char_limit" {
+  command = plan
+
+  variables {
+    collision_resistant_naming = true
+    assignment_scope           = "/providers/Microsoft.Management/managementGroups/preview"
+    initiative                 = merge(var.initiative, { name = "this_initiative_name_is_longer_than_twenty_four" })
+  }
+
+  assert {
+    condition     = length(output.assignment_name) == 24 && can(regex("^[a-z0-9_-]{15}-[0-9a-f]{8}$", output.assignment_name))
+    error_message = "MG scope: 15-char prefix + '-' + 8-char hash = exactly 24 characters"
+  }
+}

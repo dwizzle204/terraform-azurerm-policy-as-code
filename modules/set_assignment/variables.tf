@@ -140,6 +140,12 @@ variable "role_assignment_scope" {
   default     = null
 }
 
+variable "collision_resistant_naming" {
+  type        = bool
+  description = "Append a deterministic 8-character hash of (scope, policy/initiative identity) to the assignment name so distinct logical assignments sharing a long prefix cannot collide. Enabling this changes assignment names and forces replacement of existing assignments. Defaults to false (legacy truncation behavior)."
+  default     = false
+}
+
 variable "skip_remediation" {
   type        = bool
   description = "Should the module skip creation of a remediation task for policies that DeployIfNotExists and Modify"
@@ -155,10 +161,22 @@ variable "skip_role_assignment" {
 locals {
   # assignment_name at MG scope will be trimmed if exceeds 24 characters
   assignment_name_trim = local.assignment_scope.mg > 0 ? 24 : 64
-  assignment_name      = try(lower(substr(coalesce(var.assignment_name, var.initiative.name), 0, local.assignment_name_trim)), "")
-  display_name         = try(coalesce(var.assignment_display_name, var.initiative.display_name), "")
-  description          = try(coalesce(var.assignment_description, var.initiative.description), "")
-  metadata             = jsonencode(try(coalesce(var.assignment_metadata, jsondecode(var.initiative.metadata)), {}))
+  assignment_name_base = try(lower(coalesce(var.assignment_name, var.initiative.name)), "")
+  # hash inputs: assignment scope + initiative identity + requested name.
+  # Cosmetic inputs (display names/descriptions) deliberately do not affect it.
+  assignment_name_hash = substr(md5(jsonencode({
+    scope      = var.assignment_scope
+    initiative = try(var.initiative.name, "")
+    name       = coalesce(var.assignment_name, var.initiative.name)
+  })), 0, 8)
+  assignment_name = var.collision_resistant_naming ? (
+    length(local.assignment_name_base) > 0 ?
+    join("-", [substr(local.assignment_name_base, 0, local.assignment_name_trim - 9), local.assignment_name_hash]) :
+    ""
+  ) : try(lower(substr(coalesce(var.assignment_name, var.initiative.name), 0, local.assignment_name_trim)), "")
+  display_name = try(coalesce(var.assignment_display_name, var.initiative.display_name), "")
+  description  = try(coalesce(var.assignment_description, var.initiative.description), "")
+  metadata     = jsonencode(try(coalesce(var.assignment_metadata, jsondecode(var.initiative.metadata)), {}))
 
   # convert assignment parameters to the required assignment structure
   parameter_values = var.assignment_parameters != null ? {
