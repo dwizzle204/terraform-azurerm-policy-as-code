@@ -5,14 +5,20 @@
 set -euo pipefail
 
 TF="${TF_BIN:-terraform}"
+TFLINT="${TFLINT_BIN:-tflint}"
 TMPDIR_INIT_LOG=$(mktemp)
 MODULES=(definition initiative exemption def_assignment set_assignment)
 FAILED=()
 
 command -v "$TF" >/dev/null || { echo "terraform not found"; exit 1; }
+command -v "$TFLINT" >/dev/null || { echo "tflint not found - required for a successful build. Install: https://github.com/terraform-linters/tflint#installation"; exit 1; }
 
 echo "== terraform fmt -check -recursive =="
 if ! "$TF" fmt -check -recursive .; then FAILED+=("fmt"); fi
+
+echo "== tflint --recursive =="
+"$TFLINT" --init --recursive >/dev/null || FAILED+=("tflint:init")
+if ! "$TFLINT" --recursive; then FAILED+=("tflint"); fi
 
 for m in "${MODULES[@]}"; do
   echo "== module: $m =="

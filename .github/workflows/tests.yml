@@ -26,8 +26,10 @@ jobs:
       - name: Terraform Format
         run: terraform fmt -check -recursive
 
-      - name: Install TFLint
-        run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+      - name: Install TFLint (pinned)
+        uses: terraform-linters/setup-tflint@19a52fbac37dacb22a09518e4ef6ee234f2d4987 # v4.0.0
+        with:
+          tflint_version: v0.64.0
 
       - name: TFLint
         run: |
