@@ -32,6 +32,9 @@ jobs:
           tflint_version: v0.64.0
 
       - name: TFLint
+        env:
+          # authenticated GitHub API requests avoid runner-IP rate limits during plugin init
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tflint --version
           tflint --init --recursive
