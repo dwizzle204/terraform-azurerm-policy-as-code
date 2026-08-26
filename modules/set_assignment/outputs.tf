@@ -26,7 +26,7 @@ output "definition_references" {
 
 output "definition_reference_ids" {
   description = "The Member Definition Reference Ids"
-  value       = try(var.initiative.policy_definition_reference.*.reference_id, [])
+  value       = try([for ref in var.initiative.policy_definition_reference : ref.reference_id], [])
 }
 
 output "assignment_name" {

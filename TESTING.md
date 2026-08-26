@@ -9,6 +9,7 @@ opt-in integration tests touch live Azure.
 | Layer | Command | Requires Azure? | Proves |
 |-------|---------|-----------------|--------|
 | Static analysis | `terraform fmt -check -recursive` | No | Canonical formatting |
+| Linting | `tflint --recursive` | No | Terraform lint rules (deprecated syntax, unused declarations, provider constraints) |
 | Module validation | `terraform init -backend=false && terraform validate` | No | Configuration/provider schema validity |
 | Offline contract tests | `terraform test` (per module, mocked providers) | No | Module logic: scope parsing, naming, parameter merging, identity/enforcement-gated remediation selection, exemptions, initiative references |
 | Negative validation | `scripts/test.sh` scratch plan | No | Missing policy definition files fail with a clear file error |
@@ -21,7 +22,9 @@ opt-in integration tests touch live Azure.
 ```
 
 Runs every offline layer and prints `ALL OFFLINE GATES PASSED` on success.
-Requires Terraform >= 1.7 (`mock_provider`; developed against ~1.15).
+Requires Terraform >= 1.7 (`mock_provider`; developed against ~1.15) and
+[tflint](https://github.com/terraform-linters/tflint#installation) — both are
+hard requirements for a successful build.
 
 ## What the offline tests cover
 

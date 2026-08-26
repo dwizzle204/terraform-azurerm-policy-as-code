@@ -26,6 +26,15 @@ jobs:
       - name: Terraform Format
         run: terraform fmt -check -recursive
 
+      - name: Install TFLint
+        run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+
+      - name: TFLint
+        run: |
+          tflint --version
+          tflint --init --recursive
+          tflint --recursive
+
   examples-validate:
     name: Examples Validate (backend disabled, no Azure creds)
     env:
