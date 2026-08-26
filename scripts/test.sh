@@ -17,7 +17,7 @@ echo "== terraform fmt -check -recursive =="
 if ! "$TF" fmt -check -recursive .; then FAILED+=("fmt"); fi
 
 echo "== provider constraint consistency (#9) =="
-RV_EXPECT='required_version = ">= 1.8"'
+RV_EXPECT='required_version = ">= 1.11"'
 AZ_EXPECT='version = ">= 4.35, < 6.0"'
 for m in "${MODULES[@]}"; do
   grep -qF "$RV_EXPECT" "modules/$m/versions.tf" || { echo "constraint drift in modules/$m/versions.tf: missing '$RV_EXPECT'"; diff <(echo "$RV_EXPECT") <(grep required_version "modules/$m/versions.tf"); FAILED+=("constraints:$m"); }

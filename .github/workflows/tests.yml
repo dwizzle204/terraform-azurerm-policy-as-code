@@ -70,7 +70,7 @@ jobs:
       fail-fast: false
       matrix:
         module: [definition, initiative, exemption, def_assignment, set_assignment]
-        terraform_version: ["~1.10.0", "~1.15.0"]
+        terraform_version: ["~1.11.0", "~1.15.0"]
     defaults:
       run:
         working-directory: modules/${{ matrix.module }}
