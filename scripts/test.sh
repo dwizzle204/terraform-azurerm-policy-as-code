@@ -5,6 +5,7 @@
 set -euo pipefail
 
 TF="${TF_BIN:-terraform}"
+TMPDIR_INIT_LOG=$(mktemp)
 MODULES=(definition initiative exemption def_assignment set_assignment)
 FAILED=()
 
@@ -16,7 +17,7 @@ if ! "$TF" fmt -check -recursive .; then FAILED+=("fmt"); fi
 for m in "${MODULES[@]}"; do
   echo "== module: $m =="
   pushd "modules/$m" >/dev/null
-  if ! "$TF" init -backend=false -no-color >/dev/null; then FAILED+=("$m:init"); popd >/dev/null; continue; fi
+  if ! "$TF" init -backend=false -no-color -input=false >"$TMPDIR_INIT_LOG" 2>&1; then echo "init failed for $m:"; tail -5 "$TMPDIR_INIT_LOG"; FAILED+=("$m:init"); popd >/dev/null; continue; fi
   "$TF" validate -no-color >/dev/null || FAILED+=("$m:validate")
   "$TF" test -no-color || FAILED+=("$m:test")
   popd >/dev/null
