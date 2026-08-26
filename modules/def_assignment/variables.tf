@@ -226,7 +226,7 @@ variable "remediate_effects" {
 
 variable "remediation_reference_ids" {
   type        = list(string)
-  description = "Explicit definition reference ids (for def_assignment: definition names) to remediate regardless of resolved effect. Unknown ids fail the plan. Ignored when empty."
+  description = "Explicit definition reference ids to remediate when the resolved effect is unresolved (empty). Known non-remediable effects (Audit, Deny, etc.) remain rejected even when explicitly listed. Unknown ids fail the plan. Ignored when empty."
   default     = []
 }
 
