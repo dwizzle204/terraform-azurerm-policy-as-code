@@ -220,8 +220,8 @@ locals {
   definition_parameters_decoded = try(jsondecode(var.definition.parameters), var.definition.parameters, {})
   # note: not coalesce() - it rejects empty strings, which are a valid
   # "no effect declared" outcome from try()
-  raw_effect = var.assignment_effect != null ? var.assignment_effect : try(jsondecode(var.definition.policy_rule).then.effect, "")
-  interpolated_parameter        = can(regex("^\\[parameters\\('(.+?)'\\)\\]$", local.raw_effect)) ? regex("^\\[parameters\\('(.+?)'\\)\\]$", local.raw_effect)[0] : null
+  raw_effect             = var.assignment_effect != null ? var.assignment_effect : try(jsondecode(var.definition.policy_rule).then.effect, "")
+  interpolated_parameter = can(regex("^\\[parameters\\('(.+?)'\\)\\]$", local.raw_effect)) ? regex("^\\[parameters\\('(.+?)'\\)\\]$", local.raw_effect)[0] : null
   effective_effect = lower(
     local.interpolated_parameter != null ?
     tostring(try(

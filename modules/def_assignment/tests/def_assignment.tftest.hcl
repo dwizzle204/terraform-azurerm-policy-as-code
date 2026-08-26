@@ -233,7 +233,7 @@ run "lowercase_literal_then_effect_is_remediable" {
   command = plan
 
   variables {
-    remediate_effects = ["DeployIfNotExists"]
+    remediate_effects   = ["DeployIfNotExists"]
     role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
     # definition contract carries policy_rule/parameters as JSON strings
     definition = merge(var.definition, {
