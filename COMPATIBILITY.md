@@ -46,4 +46,9 @@ open upper bounds are exercised.
 | set_assignment / def_assignment | `assignment_metadata` | free-form Azure metadata |
 | exemption | `metadata` | free-form Azure metadata, shape validated |
 
-`overrides` and `resource_selectors` remain permissive until #8 introduces their typed contracts.
+
+### #8 overrides / resource_selectors typed contracts
+
+Rejected at plan time: map-form `selectors`, `effect` as the override payload key, missing
+`kind` on resource selectors, >10 entries per input. See module README "Migration notes (#8)"
+sections for before/after snippets.

@@ -24,11 +24,8 @@ module "org_mg_whitelist_regions" {
   # optional resource selectors (preview)
   resource_selectors = [
     {
-      name = "SDPRegions"
-      selectors = {
-        kind = "resourceLocation"
-        in   = ["uk", "uksouth", "ukwest"]
-      }
+      name      = "SDPRegions"
+      selectors = [{ kind = "resourceLocation", in = ["uk", "uksouth", "ukwest"] }]
     }
   ]
 }
@@ -65,10 +62,8 @@ module "org_mg_configure_asc_initiative" {
   # optional overrides (preview)
   overrides = [
     {
-      effect = "AuditIfNotExists"
-      selectors = {
-        in = ["ExportAscAlertsAndRecommendationsToEventhub", "ExportAscAlertsAndRecommendationsToLogAnalytics"]
-      }
+      value     = "AuditIfNotExists"
+      selectors = [{ kind = "policyDefinitionReferenceId", in = ["ExportAscAlertsAndRecommendationsToEventhub", "ExportAscAlertsAndRecommendationsToLogAnalytics"] }]
     }
   ]
 }

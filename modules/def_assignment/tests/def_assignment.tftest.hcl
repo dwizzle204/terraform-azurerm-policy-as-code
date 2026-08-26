@@ -248,3 +248,50 @@ run "lowercase_literal_then_effect_is_remediable" {
   }
 }
 
+
+run "def_assignment_resource_selector_and_override_passthrough" {
+  command = plan
+
+  variables {
+    resource_selectors = [
+      { name = "sdp", selectors = [{ kind = "resourceWithoutLocation", not_in = ["microsoft.contoso/legacy"] }] }
+    ]
+    overrides = [
+      { value = "DeployIfNotExists", selectors = [{ kind = "resourceLocation", in = ["westeurope"] }] }
+    ]
+  }
+
+  assert {
+    condition     = azurerm_subscription_policy_assignment.def[0].resource_selectors[0].selectors[0].kind == "resourceWithoutLocation"
+    error_message = "Resource selector kinds must pass through on def_assignment"
+  }
+
+  assert {
+    condition     = azurerm_subscription_policy_assignment.def[0].overrides[0].selectors[0].kind == "resourceLocation"
+    error_message = "Override selectors must be supported on def_assignment (new capability, #8)"
+  }
+
+  assert {
+    condition     = length(azurerm_subscription_policy_assignment.def[0].resource_selectors[0].selectors[0].not_in) == 1 && contains(azurerm_subscription_policy_assignment.def[0].resource_selectors[0].selectors[0].not_in, "microsoft.contoso/legacy")
+    error_message = "Resource selector not_in values must pass through (#8)"
+  }
+
+  assert {
+    condition     = length(azurerm_subscription_policy_assignment.def[0].overrides[0].selectors[0].in) == 1 && contains(azurerm_subscription_policy_assignment.def[0].overrides[0].selectors[0].in, "westeurope")
+    error_message = "Override selector in values must pass through (#8)"
+  }
+}
+
+run "def_assignment_invalid_override_kind_fails_validation" {
+  command = plan
+
+  variables {
+    overrides = [
+      { value = "Audit", selectors = [{ kind = "nope" }] }
+    ]
+  }
+
+  expect_failures = [
+    var.overrides,
+  ]
+}

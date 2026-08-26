@@ -457,3 +457,83 @@ run "assignment_only_deploys_without_rbac_or_remediation" {
   }
 }
 
+
+run "override_selectors_round_trip_with_kinds" {
+  command = plan
+
+  variables {
+    overrides = [
+      {
+        value = "Disabled"
+        selectors = [
+          { kind = "policyDefinitionReferenceId", in = ["member_a"] },
+          { kind = "resourceLocation", not_in = ["global"] }
+        ]
+      }
+    ]
+  }
+
+  assert {
+    condition     = length(azurerm_subscription_policy_assignment.set[0].overrides) == 1
+    error_message = "One override should reach the assignment resource"
+  }
+
+  assert {
+    condition     = length(azurerm_subscription_policy_assignment.set[0].overrides[0].selectors) == 2
+    error_message = "All supplied override selectors must be emitted (none dropped)"
+  }
+
+  assert {
+    condition     = azurerm_subscription_policy_assignment.set[0].overrides[0].value == "Disabled"
+    error_message = "Override effect value must round-trip"
+  }
+}
+
+run "invalid_override_kind_fails_validation" {
+  command = plan
+
+  variables {
+    overrides = [
+      { value = "Audit", selectors = [{ kind = "bogusKind", in = ["x"] }] }
+    ]
+  }
+
+  expect_failures = [
+    var.overrides,
+  ]
+}
+
+run "multiple_resource_selectors_round_trip" {
+  command = plan
+
+  variables {
+    resource_selectors = [
+      { name = "sdp-phase-1", selectors = [{ kind = "resourceLocation", in = ["canadacentral"] }] },
+      { name = "sdp-phase-2", selectors = [{ kind = "resourceType", in = ["Microsoft.Compute/virtualMachines"] }] }
+    ]
+  }
+
+  assert {
+    condition     = length(azurerm_subscription_policy_assignment.set[0].resource_selectors) == 2
+    error_message = "Both resource selectors must be emitted"
+  }
+
+  assert {
+    condition     = length(azurerm_subscription_policy_assignment.set[0].resource_selectors[0].selectors) == 1
+    error_message = "Nested selector lists must round-trip intact"
+  }
+}
+
+run "invalid_resource_selector_kind_fails_validation" {
+  command = plan
+
+  variables {
+    resource_selectors = [
+      { name = "bad", selectors = [{ kind = "notAKind", in = ["x"] }] }
+    ]
+  }
+
+  expect_failures = [
+    var.resource_selectors,
+  ]
+}

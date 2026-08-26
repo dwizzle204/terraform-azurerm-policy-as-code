@@ -34,10 +34,14 @@ resource "azurerm_management_group_policy_assignment" "set" {
   dynamic "overrides" {
     for_each = var.overrides
     content {
-      value = overrides.value.effect
-      selectors {
-        in     = try(overrides.value.selectors.in, null)
-        not_in = try(overrides.value.selectors.not_in, null)
+      value = overrides.value.value
+      dynamic "selectors" {
+        for_each = coalesce(overrides.value.selectors, [])
+        content {
+          kind   = try(selectors.value.kind, null)
+          in     = try(selectors.value.in, null)
+          not_in = try(selectors.value.not_in, null)
+        }
       }
     }
   }
@@ -46,10 +50,13 @@ resource "azurerm_management_group_policy_assignment" "set" {
     for_each = var.resource_selectors
     content {
       name = try(resource_selectors.value.name, null)
-      selectors {
-        kind   = resource_selectors.value.selectors.kind
-        in     = try(resource_selectors.value.selectors.in, null)
-        not_in = try(resource_selectors.value.selectors.not_in, null)
+      dynamic "selectors" {
+        for_each = resource_selectors.value.selectors
+        content {
+          kind   = selectors.value.kind
+          in     = try(selectors.value.in, null)
+          not_in = try(selectors.value.not_in, null)
+        }
       }
     }
   }
@@ -91,10 +98,14 @@ resource "azurerm_subscription_policy_assignment" "set" {
   dynamic "overrides" {
     for_each = var.overrides
     content {
-      value = overrides.value.effect
-      selectors {
-        in     = try(overrides.value.selectors.in, null)
-        not_in = try(overrides.value.selectors.not_in, null)
+      value = overrides.value.value
+      dynamic "selectors" {
+        for_each = coalesce(overrides.value.selectors, [])
+        content {
+          kind   = try(selectors.value.kind, null)
+          in     = try(selectors.value.in, null)
+          not_in = try(selectors.value.not_in, null)
+        }
       }
     }
   }
@@ -103,10 +114,13 @@ resource "azurerm_subscription_policy_assignment" "set" {
     for_each = var.resource_selectors
     content {
       name = try(resource_selectors.value.name, null)
-      selectors {
-        kind   = resource_selectors.value.selectors.kind
-        in     = try(resource_selectors.value.selectors.in, null)
-        not_in = try(resource_selectors.value.selectors.not_in, null)
+      dynamic "selectors" {
+        for_each = resource_selectors.value.selectors
+        content {
+          kind   = selectors.value.kind
+          in     = try(selectors.value.in, null)
+          not_in = try(selectors.value.not_in, null)
+        }
       }
     }
   }
@@ -148,10 +162,14 @@ resource "azurerm_resource_group_policy_assignment" "set" {
   dynamic "overrides" {
     for_each = var.overrides
     content {
-      value = overrides.value.effect
-      selectors {
-        in     = try(overrides.value.selectors.in, null)
-        not_in = try(overrides.value.selectors.not_in, null)
+      value = overrides.value.value
+      dynamic "selectors" {
+        for_each = coalesce(overrides.value.selectors, [])
+        content {
+          kind   = try(selectors.value.kind, null)
+          in     = try(selectors.value.in, null)
+          not_in = try(selectors.value.not_in, null)
+        }
       }
     }
   }
@@ -160,10 +178,13 @@ resource "azurerm_resource_group_policy_assignment" "set" {
     for_each = var.resource_selectors
     content {
       name = try(resource_selectors.value.name, null)
-      selectors {
-        kind   = resource_selectors.value.selectors.kind
-        in     = try(resource_selectors.value.selectors.in, null)
-        not_in = try(resource_selectors.value.selectors.not_in, null)
+      dynamic "selectors" {
+        for_each = resource_selectors.value.selectors
+        content {
+          kind   = selectors.value.kind
+          in     = try(selectors.value.in, null)
+          not_in = try(selectors.value.not_in, null)
+        }
       }
     }
   }
@@ -205,10 +226,14 @@ resource "azurerm_resource_policy_assignment" "set" {
   dynamic "overrides" {
     for_each = var.overrides
     content {
-      value = overrides.value.effect
-      selectors {
-        in     = try(overrides.value.selectors.in, null)
-        not_in = try(overrides.value.selectors.not_in, null)
+      value = overrides.value.value
+      dynamic "selectors" {
+        for_each = coalesce(overrides.value.selectors, [])
+        content {
+          kind   = try(selectors.value.kind, null)
+          in     = try(selectors.value.in, null)
+          not_in = try(selectors.value.not_in, null)
+        }
       }
     }
   }
@@ -217,10 +242,13 @@ resource "azurerm_resource_policy_assignment" "set" {
     for_each = var.resource_selectors
     content {
       name = try(resource_selectors.value.name, null)
-      selectors {
-        kind   = resource_selectors.value.selectors.kind
-        in     = try(resource_selectors.value.selectors.in, null)
-        not_in = try(resource_selectors.value.selectors.not_in, null)
+      dynamic "selectors" {
+        for_each = resource_selectors.value.selectors
+        content {
+          kind   = selectors.value.kind
+          in     = try(selectors.value.in, null)
+          not_in = try(selectors.value.not_in, null)
+        }
       }
     }
   }
