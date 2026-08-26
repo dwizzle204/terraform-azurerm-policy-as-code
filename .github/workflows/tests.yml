@@ -63,6 +63,29 @@ jobs:
       - name: Terraform Validate
         run: terraform validate -no-color
 
+  examples-machine-config-validate:
+    name: Examples Machine Config Validate (backend disabled, no Azure creds)
+    env:
+      TF_IN_AUTOMATION: true
+      TF_INPUT: false
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: examples-machine-config
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ~1.15.0
+          terraform_wrapper: false
+
+      - name: Terraform Init (backend disabled)
+        run: terraform init -backend=false -no-color
+
+      - name: Terraform Validate
+        run: terraform validate -no-color
+
   offline-module-tests:
     name: Module Tests (${{ matrix.module }}, tf ${{ matrix.terraform_version }}) — mocked providers, no Azure creds
     env:
@@ -72,7 +95,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        module: [definition, initiative, exemption, def_assignment, set_assignment]
+        module: [definition, initiative, exemption, def_assignment, set_assignment, intent]
         terraform_version: ["~1.11.0", "~1.15.0"]
     defaults:
       run:

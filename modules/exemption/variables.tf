@@ -106,14 +106,27 @@ locals {
   # descriptive sentinel error when the governed contract is violated.
   # Future-dated expiry cannot be checked deterministically at plan time;
   # Azure rejects past dates at apply. Format is validated here.
+  # strict calendar validation (leap years included); regex alone accepts e.g. 2026-99-40 (#10 review)
+  expires_on_date_parts = var.expires_on != null ? regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on) : ["0000", "00", "00"]
+  expires_on_days_in_month = (
+    contains(["01", "03", "05", "07", "08", "10", "12"], local.expires_on_date_parts[1]) ? 31 :
+    contains(["04", "06", "09", "11"], local.expires_on_date_parts[1]) ? 30 :
+    (tonumber(local.expires_on_date_parts[0]) % 4 == 0 && (tonumber(local.expires_on_date_parts[0]) % 100 != 0 || tonumber(local.expires_on_date_parts[0]) % 400 == 0)) ? 29 : 28
+  )
+  expires_on_is_valid_calendar_date = (
+    can(regex("^\\d{4}-\\d{2}-\\d{2}$", coalesce(var.expires_on, "1970-01-01"))) &&
+    tonumber(local.expires_on_date_parts[1]) >= 1 && tonumber(local.expires_on_date_parts[1]) <= 12 &&
+    tonumber(local.expires_on_date_parts[2]) >= 1 && tonumber(local.expires_on_date_parts[2]) <= local.expires_on_days_in_month
+  )
+
   governance_checks = (
     var.governed == null ? "ok" :
     var.exemption_category == "Waiver" && var.expires_on == null ?
     file("[ERROR] Governed Waiver exemptions require expires_on (yyyy-mm-dd). Set expires_on or change exemption_category.") :
     var.exemption_category == "Mitigated" && try(var.governed.mitigation, null) == null ?
     file("[ERROR] Governed Mitigated exemptions require governed.mitigation describing the remediation in place.") :
-    var.expires_on != null && !can(regex("^\\d{4}-\\d{2}-\\d{2}$", var.expires_on)) ?
-    file("[ERROR] expires_on must use format yyyy-mm-dd.") :
+    var.expires_on != null && !local.expires_on_is_valid_calendar_date ?
+    file("[ERROR] expires_on must be a valid calendar date in format yyyy-mm-dd (e.g. 2026-12-31).") :
     "ok"
   )
 

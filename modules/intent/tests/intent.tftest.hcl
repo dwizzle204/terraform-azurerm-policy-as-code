@@ -180,3 +180,111 @@ run "dangling_assignment_key_in_exemption_fails_validation" {
     var.exemptions,
   ]
 }
+
+# --- review-sweep coverage (codex findings on #13) ---
+
+run "mg_scope_inherited_by_member_definitions" {
+  command = plan
+
+  assert {
+    condition     = output.definition_details["member_a"].management_group_id == "/providers/Microsoft.Management/managementGroups/platform"
+    error_message = "Member definitions must inherit the referencing initiative's management group scope (#13 review)"
+  }
+}
+
+run "definition_metadata_passthrough" {
+  command = plan
+
+  variables {
+    definitions = {
+      member_a = {
+        category    = "Monitoring"
+        policy_name = "deploy_vnet_diagnostic_setting"
+        metadata    = { controlIds = ["AZC-01"] }
+      }
+      member_b = {
+        category    = "Monitoring"
+        policy_name = "deploy_application_gateway_diagnostic_setting"
+        metadata    = { controlIds = ["AZC-02"] }
+      }
+    }
+  }
+
+  assert {
+    condition     = output.definition_details["member_a"].metadata.controlIds == ["AZC-01"]
+    error_message = "Definition metadata passthrough must preserve catalog control IDs (#13 review)"
+  }
+}
+
+run "remediation_reachable_through_intent" {
+  command = plan
+
+  variables {
+    assignments = {
+      dine_remediation = {
+        initiative_key            = "platform_baseline"
+        scope                     = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        role_definition_ids       = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+        remediate_effects         = ["DeployIfNotExists", "Modify"]
+        remediation_reference_ids = []
+        remediate                 = true
+      }
+    }
+    initiatives = {
+      platform_baseline = merge(var.initiatives.platform_baseline, {
+        member_definition_keys = ["dine_member"]
+      })
+    }
+    definitions = {
+      dine_member = {
+        category    = "Monitoring"
+        policy_name = "deploy_vnet_diagnostic_setting"
+      }
+    }
+  }
+
+  assert {
+    condition     = length(output.assignment_remediation_references["dine_remediation"]) > 0
+    error_message = "Remediation tasks must be reachable through the intent wrapper when remediate=true and effects match (#13 review P1)"
+  }
+}
+
+run "subscription_only_definitions_resolve_without_error" {
+  command = plan
+
+  variables {
+    definitions = {
+      standalone = { category = "Monitoring", policy_name = "deploy_vnet_diagnostic_setting" }
+    }
+    initiatives = {}
+    assignments = {}
+    exemptions  = {}
+  }
+
+  assert {
+    condition     = length(output.definition_ids) == 1 && output.definition_details["standalone"].management_group_id == null
+    error_message = "Subscription-only/unreferenced definitions must resolve with null management_group_id (regression for coalesce fix)"
+  }
+}
+
+run "heterogeneous_assignment_parameters_accepted" {
+  command = plan
+
+  variables {
+    assignments = {
+      mixed_params = {
+        initiative_key = "platform_baseline"
+        scope          = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/sandbox-rg"
+        parameters = {
+          stringParam = "text-value"
+          listParam   = ["a", "b"]
+        }
+      }
+    }
+  }
+
+  assert {
+    condition     = output.assignment_names["mixed_params"] == "mixed_params"
+    error_message = "Heterogeneous parameter values must be accepted and the logical key must default the assignment name (#13 review)"
+  }
+}

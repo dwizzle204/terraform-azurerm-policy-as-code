@@ -36,8 +36,8 @@ Definitions will stored in the local repo library under [Guest Configuration](..
 
 | Name | Version |
 |------|---------|
-| terraform | >= 1.4 |
-| azurerm | >= 4.12 |
+| terraform | >= 1.11 |
+| azurerm | ~> 5.2 |
 
 ## Modules
 
@@ -59,6 +59,7 @@ Definitions will stored in the local repo library under [Guest Configuration](..
 | [azurerm_policy_set_definition.deploy_guest_config_prereqs_initiative](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/policy_set_definition) | data source |
 | [azurerm_role_definition.contributor](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/role_definition) | data source |
 | [azurerm_storage_container.guest_config_container](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/storage_container) | data source |
+| [azurerm_storage_account.guest_config](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/storage_account) | data source |
 
 ## Inputs
 

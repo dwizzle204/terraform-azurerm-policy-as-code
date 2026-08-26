@@ -50,8 +50,11 @@ never share a state across environments.
 
 - Enable versioning + soft-delete on the storage layer before first apply.
 - Practice restoring a state copy into a scratch backend quarterly.
-- Use `terraform state mv` / `-replace` for renames inside a state; use the
-  documented import flow when adopting existing Azure Policy objects.
+- Use `terraform state mv` to rename addresses inside a state (renames the
+  reference, never the Azure object); use the documented import flow when
+  adopting existing Azure Policy objects. Note: `-replace=ADDRESS` is a
+  plan/apply option that forces an object to be destroyed and recreated —
+  keep it out of rename procedures.
 - Never hand-edit state except as a last resort with a fresh backup.
 
 ## Anti-patterns
