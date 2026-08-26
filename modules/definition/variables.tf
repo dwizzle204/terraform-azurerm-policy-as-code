@@ -86,13 +86,15 @@ variable "file_path" {
 
 locals {
   # import the custom policy object from a library or specified file path
+  # NOTE: no "{}" fallback - a missing/unresolvable definition file must fail
+  # loudly here instead of surfacing as a confusing downstream type error.
+  # See upstream issue gettek/terraform-azurerm-policy-as-code#11.
   policy_object = jsondecode(coalesce(try(
     file(var.file_path),
     file("${path.cwd}/policies/${title(var.policy_category)}/${var.policy_name}.json"),
     file("${path.root}/policies/${title(var.policy_category)}/${var.policy_name}.json"),
     file("${path.root}/../policies/${title(var.policy_category)}/${var.policy_name}.json"),
-    file("${path.module}/../../policies/${title(var.policy_category)}/${var.policy_name}.json"),
-    "{}" # return empty object if no policy is found
+    file("${path.module}/../../policies/${title(var.policy_category)}/${var.policy_name}.json")
   )))
 
   # fallbacks

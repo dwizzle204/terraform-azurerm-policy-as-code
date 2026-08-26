@@ -22,15 +22,15 @@ mock_provider "azuread" {}
 variables {
   assignment_scope = "/subscriptions/00000000-0000-0000-0000-000000000000"
   initiative = {
-    id                  = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policySetDefinitions/mock_initiative"
-    name                = "mock_initiative"
-    display_name        = "Mock Initiative"
-    description         = "Mock"
-    management_group_id = null
-    parameters          = {}
-    metadata            = jsonencode({ category = "Mock" })
-    role_definition_ids = []
-    replace_trigger     = "abc"
+    id                          = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policySetDefinitions/mock_initiative"
+    name                        = "mock_initiative"
+    display_name                = "Mock Initiative"
+    description                 = "Mock"
+    management_group_id         = null
+    parameters                  = {}
+    metadata                    = jsonencode({ category = "Mock" })
+    role_definition_ids         = []
+    replace_trigger             = "abc"
     policy_definition_reference = []
   }
 }

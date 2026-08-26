@@ -12,7 +12,7 @@ variables {
       mode         = "All"
       metadata     = jsonencode({ category = "Monitoring", version = "1.0.0" })
       parameters = jsonencode({
-        effect = { type = "String", defaultValue = "AuditIfNotExists", allowedValues = ["AuditIfNotExists", "Disabled"] }
+        effect        = { type = "String", defaultValue = "AuditIfNotExists", allowedValues = ["AuditIfNotExists", "Disabled"] }
         retentionDays = { type = "String", defaultValue = "30" }
       })
       policy_rule = jsonencode({ if = {}, then = { effect = "" } })
@@ -92,7 +92,7 @@ run "duplicate_members_are_indexed" {
   command = plan
 
   variables {
-    duplicate_members  = true
+    duplicate_members = true
     member_definitions = [
       { id = "/providers/Microsoft.Authorization/policyDefinitions/dup", name = "dup", display_name = "Dup", mode = "All", metadata = jsonencode({ category = "Monitoring" }), parameters = jsonencode({}), policy_rule = jsonencode({}) },
       { id = "/providers/Microsoft.Authorization/policyDefinitions/dup", name = "dup", display_name = "Dup", mode = "All", metadata = jsonencode({ category = "Monitoring" }), parameters = jsonencode({}), policy_rule = jsonencode({}) }
