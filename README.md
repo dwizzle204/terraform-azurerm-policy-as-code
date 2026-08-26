@@ -158,6 +158,10 @@ module org_mg_platform_diagnostics_initiative {
 }
 ```
 
+## [Policy Intent Module](modules/intent)
+
+The intent module is a thin, data-driven orchestrator over the definition, initiative, assignment and exemption modules. Consumers declare typed maps of intent (optionally decoded from YAML/JSON) and never select scope-specific AzureRM resources.
+
 ## [Policy Exemption Module](modules/exemption)
 
 Use the exemption module in favour of `not_scopes` to create an auditable time-sensitive Policy exemption
