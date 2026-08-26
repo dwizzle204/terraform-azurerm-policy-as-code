@@ -254,6 +254,12 @@ To trigger an on-demand [compliance scan](https://learn.microsoft.com/en-us/azur
 
 > ⚠️ **Requirement:** Ensure the deployment account has at least the [Resource Policy Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#resource-policy-contributor) role at both `definition_scope` and `assignment_scope`.
 
+## Governance & Operations Docs
+
+- [Policy Catalog vs Framework](docs/POLICY_CATALOG.md) — the bundled `policies/` tree is reference content, not a production baseline
+- [Remote State Architecture](docs/REMOTE_STATE.md) — vendor-neutral state isolation, locking, RBAC and blast-radius patterns
+- [Governance Control Catalog Integration](docs/GOVERNANCE_INTEGRATION.md) — mapping external control IDs to policy/initiative/exemption metadata
+
 ## 📗Useful Resources
 
 ### GitHub
