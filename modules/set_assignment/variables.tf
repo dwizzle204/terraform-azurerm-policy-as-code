@@ -93,15 +93,49 @@ variable "non_compliance_messages" {
 }
 
 variable "overrides" {
-  type        = list(any) # typed in #8
-  description = "Optional list of assignment Overrides (preview), max 10. Allows you to change the effect of a policy definition without modifying the underlying policy definition or using a parameterized effect in the policy definition"
-  default     = []
+  description = "Optional list of assignment Overrides (preview), max 10. Allows you to change the effect of a policy definition without modifying the underlying policy definition or using a parameterized effect in the policy definition. Selector kind must be one of: policyDefinitionReferenceId, resourceLocation"
+  type = list(object({
+    value = string
+    selectors = optional(list(object({
+      kind   = optional(string)
+      in     = optional(list(string))
+      not_in = optional(list(string))
+    })), [])
+  }))
+  default = []
+
+  validation {
+    condition = alltrue([
+      for o in var.overrides : alltrue([
+        for s in coalesce(o.selectors, []) :
+        contains(["policyDefinitionReferenceId", "resourceLocation"], coalesce(s.kind, "policyDefinitionReferenceId"))
+      ])
+    ])
+    error_message = "Override selector kind must be one of: policyDefinitionReferenceId, resourceLocation."
+  }
 }
 
 variable "resource_selectors" {
-  type        = list(any) # typed in #8
-  description = "Optional list of Resource selectors (preview), max 10. These facilitate safe deployment practices (SDP) by enabling you to gradually roll out policy assignments based on factors like resource location, resource type, or whether a resource has a location"
-  default     = []
+  description = "Optional list of Resource selectors (preview), max 10. These facilitate safe deployment practices (SDP) by enabling you to gradually roll out policy assignments based on factors like resource location, resource type, or whether a resource has a location. Selector kind must be one of: resourceLocation, resourceType, resourceWithoutLocation"
+  type = list(object({
+    name = optional(string)
+    selectors = list(object({
+      kind   = string
+      in     = optional(list(string))
+      not_in = optional(list(string))
+    }))
+  }))
+  default = []
+
+  validation {
+    condition = alltrue(flatten([
+      for rs in var.resource_selectors : [
+        for s in rs.selectors :
+        contains(["resourceLocation", "resourceType", "resourceWithoutLocation"], s.kind)
+      ]
+    ]))
+    error_message = "Resource selector kind must be one of: resourceLocation, resourceType, resourceWithoutLocation."
+  }
 }
 
 variable "identity_ids" {

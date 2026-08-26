@@ -46,4 +46,3 @@ open upper bounds are exercised.
 | set_assignment / def_assignment | `assignment_metadata` | free-form Azure metadata |
 | exemption | `metadata` | free-form Azure metadata, shape validated |
 
-`overrides` and `resource_selectors` remain permissive until #8 introduces their typed contracts.
