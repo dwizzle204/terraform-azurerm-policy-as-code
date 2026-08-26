@@ -1,6 +1,16 @@
 variable "definition" {
-  type        = any
-  description = "Policy Definition resource node"
+  description = "Policy Definition resource node (matches the definition module's `definition` output)"
+  type = object({
+    id                  = string
+    name                = string
+    display_name        = optional(string)
+    description         = optional(string)
+    mode                = optional(string)
+    management_group_id = optional(string)
+    metadata            = optional(string)
+    parameters          = optional(string)
+    policy_rule         = optional(string)
+  })
 }
 
 variable "assignment_scope" {
@@ -39,6 +49,7 @@ variable "assignment_effect" {
 }
 
 variable "assignment_parameters" {
+  # any: parameter values are defined by each policy's own schema
   type        = any
   description = "The policy assignment parameters. Changing this forces a new resource to be created"
   default     = {}
@@ -48,6 +59,11 @@ variable "assignment_metadata" {
   type        = any
   description = "The optional metadata for the policy assignment."
   default     = null
+
+  validation {
+    condition     = var.assignment_metadata == null || can({ for k, v in var.assignment_metadata : k => v }) || can(tostring(var.assignment_metadata))
+    error_message = "assignment_metadata must be an object or a JSON-encoded string."
+  }
 }
 
 variable "assignment_enforcement_mode" {
