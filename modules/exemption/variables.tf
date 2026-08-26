@@ -68,9 +68,15 @@ variable "expires_on" {
 }
 
 variable "metadata" {
+  # any: mirrors Azure Policy free-form exemption metadata
   type        = any
   description = "Optional policy exemption metadata. For example but not limited to; requestedBy, approvedBy, approvedOn, ticketRef, etc"
   default     = null
+
+  validation {
+    condition     = var.metadata == null || (can({ for k, v in var.metadata : k => v }) && !can(tolist(var.metadata))) || can(tostring(var.metadata))
+    error_message = "metadata must be an object or a JSON-encoded string."
+  }
 }
 
 locals {

@@ -142,9 +142,49 @@ else
 fi
 popd >/dev/null
 
+echo "== negative check: typed object contracts reject malformed structures (#4) =="
+TMP4=$(mktemp -d)
+mkdir -p "$TMP4/cfg"
+cat >"$TMP4/cfg/main.tf" <<EOF
+module "bad_initiative" {
+  source                  = "$PWD/modules/initiative"
+  initiative_name         = "typed_contract_probe"
+  initiative_display_name = "Typed Contract Probe"
+  management_group_id     = "/providers/Microsoft.Management/managementGroups/probe"
+  member_definitions      = [{ id = "/providers/Microsoft.Authorization/policyDefinitions/broken" }]
+}
+EOF
+cat >"$TMP4/cfg/providers.tf" <<EOF
+terraform {
+  required_providers {
+    azurerm = { source = "hashicorp/azurerm" }
+  }
+}
+
+provider "azurerm" {
+  features {}
+}
+EOF
+pushd "$TMP4/cfg" >/dev/null
+"$TF" init -backend=false -no-color >/dev/null
+set +e
+ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
+ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
+"$TF" plan -no-color >/dev/null 2>"$TMP4/err.txt"
+RC=$?
+set -e
+if [ $RC -eq 0 ]; then
+  FAILED+=("negative-check-typed: expected plan failure for malformed member_definitions")
+elif ! grep -qi "Invalid value for input variable" "$TMP4/err.txt"; then
+  FAILED+=("negative-check-typed: did not surface a type-contract error")
+else
+  echo "OK: malformed member_definitions rejected by the type contract"
+fi
+popd >/dev/null
+
 echo "== negative check: unknown remediation_reference_ids fail fast (#1/#3) =="
 TMP3=$(mktemp -d)
-trap 'rm -rf "$TMP" "$TMP2" "$TMP3"' EXIT
+trap 'rm -rf "$TMP" "$TMP2" "$TMP3" "$TMP4"' EXIT
 mkdir -p "$TMP3/cfg"
 cat >"$TMP3/cfg/main.tf" <<EOF
 module "unknown_ref_assignment" {

@@ -456,3 +456,4 @@ run "assignment_only_deploys_without_rbac_or_remediation" {
     error_message = "Assignment-only deployment must have no managed identity and no remediation selections"
   }
 }
+

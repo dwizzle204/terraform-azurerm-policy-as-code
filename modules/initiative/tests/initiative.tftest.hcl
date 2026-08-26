@@ -197,3 +197,4 @@ run "conflicting_schemas_reported_and_escape_hatch_works" {
     error_message = "The conflict diagnostic must identify every declaring member definition"
   }
 }
+

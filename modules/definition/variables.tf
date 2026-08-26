@@ -65,7 +65,7 @@ variable "policy_rule" {
   description = "The policy rule for the policy definition. This is a JSON object representing the rule that contains an if and a then block. Omitting this assumes the rules are located in the policy file"
   default     = null
   validation {
-    condition     = var.policy_rule == null || can({ for k, v in var.policy_rule : k => v }) || can(tostring(var.policy_rule))
+    condition     = var.policy_rule == null || (can({ for k, v in var.policy_rule : k => v }) && !can(tolist(var.policy_rule))) || can(tostring(var.policy_rule))
     error_message = "policy_rule must be an object (policyRule) or a JSON-encoded string."
   }
 }
@@ -75,7 +75,7 @@ variable "policy_parameters" {
   description = "Parameters for the policy definition. This field is a JSON object representing the parameters of your policy definition. Omitting this assumes the parameters are located in the policy file"
   default     = null
   validation {
-    condition     = var.policy_parameters == null || can({ for k, v in var.policy_parameters : k => v }) || can(tostring(var.policy_parameters))
+    condition     = var.policy_parameters == null || (can({ for k, v in var.policy_parameters : k => v }) && !can(tolist(var.policy_parameters))) || can(tostring(var.policy_parameters))
     error_message = "policy_parameters must be an object (parameters schema) or a JSON-encoded string."
   }
 }
@@ -85,7 +85,7 @@ variable "policy_metadata" {
   description = "The metadata for the policy definition. This is a JSON object representing additional metadata that should be stored with the policy definition. Omitting this will fallback to meta in the definition or merge var.policy_category and var.policy_version"
   default     = null
   validation {
-    condition     = var.policy_metadata == null || can({ for k, v in var.policy_metadata : k => v }) || can(tostring(var.policy_metadata))
+    condition     = var.policy_metadata == null || (can({ for k, v in var.policy_metadata : k => v }) && !can(tolist(var.policy_metadata))) || can(tostring(var.policy_metadata))
     error_message = "policy_metadata must be an object or a JSON-encoded string."
   }
 }
@@ -147,7 +147,8 @@ locals {
   description  = coalesce(var.policy_description, try((local.policy_object).properties.description, local.title))
   metadata     = coalesce(null, var.policy_metadata, try((local.policy_object).properties.metadata, merge({ category = local.category }, { version = local.version })))
   parameters   = coalesce(null, var.policy_parameters, try((local.policy_object).properties.parameters, {}))
-  policy_rule  = coalesce(var.policy_rule, try((local.policy_object).properties.policyRule, null))
+  # try(): invalid shapes already fail var.policy_rule validation
+  policy_rule = try(coalesce(var.policy_rule, try((local.policy_object).properties.policyRule, null)), null)
 
   # manually generate the definition Id to prevent "Invalid for_each argument" on set_assignment plan/apply
   # deterministic name suffix: identical inputs (logical name + merged

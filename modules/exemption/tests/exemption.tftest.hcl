@@ -103,3 +103,15 @@ run "name_over_64_chars_fails_variable_validation" {
     var.name,
   ]
 }
+
+run "malformed_metadata_fails_validation" {
+  command = plan
+
+  variables {
+    metadata = [1, 2, 3]
+  }
+
+  expect_failures = [
+    var.metadata,
+  ]
+}

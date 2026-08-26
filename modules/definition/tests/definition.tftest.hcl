@@ -95,3 +95,17 @@ run "runtime_only_definition_without_file" {
     error_message = "Runtime metadata should be used when no file resolves"
   }
 }
+
+run "malformed_policy_rule_fails_validation" {
+  command = plan
+
+  variables {
+    file_path   = "tests/fixtures/test_policy.json"
+    policy_name = "test_policy"
+    policy_rule = ["not", "an", "object"]
+  }
+
+  expect_failures = [
+    var.policy_rule,
+  ]
+}
