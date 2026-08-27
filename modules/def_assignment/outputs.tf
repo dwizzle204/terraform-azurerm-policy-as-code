@@ -27,3 +27,4 @@ output "parameters" {
   description = "The Parameter Values assigned to this Policy Assignment"
   value       = local.parameters
 }
+

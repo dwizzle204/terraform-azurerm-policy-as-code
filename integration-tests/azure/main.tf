@@ -2,12 +2,12 @@
 # NOT run in normal PR validation. See README.md in this directory.
 
 terraform {
-  required_version = ">= 1.7.0"
+  required_version = ">= 1.11"
 
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = ">= 4.12"
+      version = ">= 4.35, < 6.0"
     }
   }
 }

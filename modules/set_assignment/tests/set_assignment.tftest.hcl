@@ -648,6 +648,7 @@ run "group_membership_permission_path_creates_remediation" {
     condition     = length(output.remediation_tasks) > 0
     error_message = "Group-based permission provisioning must retain remediation creation"
   }
+
 }
 
 run "role_assignment_permission_path_creates_remediation" {
@@ -676,4 +677,6 @@ run "role_assignment_permission_path_creates_remediation" {
     condition     = length(output.remediation_tasks) > 0
     error_message = "Role-assignment permission provisioning must retain remediation creation"
   }
+
 }
+
