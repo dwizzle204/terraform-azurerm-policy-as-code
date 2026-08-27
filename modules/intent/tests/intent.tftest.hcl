@@ -1,4 +1,16 @@
 mock_provider "azurerm" {
+  mock_data "azurerm_subscription" {
+    defaults        = { id = "/subscriptions/00000000-0000-0000-0000-000000000000" }
+    override_during = plan
+  }
+  mock_resource "azurerm_management_group_policy_set_definition" {
+    defaults        = { id = "/providers/Microsoft.Management/managementGroups/platform/providers/Microsoft.Authorization/policySetDefinitions/platform_baseline" }
+    override_during = plan
+  }
+  mock_resource "azurerm_policy_set_definition" {
+    defaults        = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policySetDefinitions/platform_baseline" }
+    override_during = plan
+  }
   mock_resource "azurerm_management_group_policy_assignment" {
     defaults        = { id = "/providers/Microsoft.Management/managementGroups/platform/providers/Microsoft.Authorization/policyAssignments/mock_initiative" }
     override_during = plan

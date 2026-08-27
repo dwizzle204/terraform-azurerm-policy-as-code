@@ -226,10 +226,8 @@ locals {
     }
   )
 
-  # manually generate the initiative Id to prevent "Invalid for_each argument" on consumer modules
-  initiative_id = (
-    var.management_group_id != null ?
-    "${var.management_group_id}/providers/Microsoft.Authorization/policySetDefinitions/${var.initiative_name}" :
-    "${data.azurerm_subscription.current.id}/providers/Microsoft.Authorization/policySetDefinitions/${var.initiative_name}"
+  initiative_id = try(
+    azurerm_management_group_policy_set_definition.set[0].id,
+    azurerm_policy_set_definition.sub[0].id
   )
 }

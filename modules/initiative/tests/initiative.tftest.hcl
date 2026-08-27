@@ -4,6 +4,14 @@ mock_provider "azurerm" {
     defaults        = { id = "/subscriptions/00000000-0000-0000-0000-000000000000" }
     override_during = plan
   }
+  mock_resource "azurerm_management_group_policy_set_definition" {
+    defaults        = { id = "/providers/Microsoft.Management/managementGroups/test/providers/Microsoft.Authorization/policySetDefinitions/initiative_contract_test" }
+    override_during = plan
+  }
+  mock_resource "azurerm_policy_set_definition" {
+    defaults        = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policySetDefinitions/initiative_contract_test" }
+    override_during = plan
+  }
 }
 
 variables {
@@ -195,6 +203,33 @@ run "conflicting_schemas_reported_and_escape_hatch_works" {
   assert {
     condition     = contains(output.parameter_conflicts["sharedParam"], "conflict_a") && contains(output.parameter_conflicts["sharedParam"], "conflict_b")
     error_message = "The conflict diagnostic must identify every declaring member definition"
+  }
+}
+
+run "subscription_scoped_initiative_uses_subscription_resource" {
+  command = plan
+
+  variables {
+    management_group_id = null
+  }
+
+  assert {
+    condition     = can(regex("^/subscriptions/[^/]+/providers/Microsoft.Authorization/policySetDefinitions/", output.id))
+    error_message = "Subscription-scoped initiatives must use azurerm_policy_set_definition"
+  }
+
+  assert {
+    condition     = output.initiative.management_group_id == null
+    error_message = "Subscription initiative output must have null management_group_id"
+  }
+}
+
+run "management_group_scoped_initiative_uses_mg_resource" {
+  command = plan
+
+  assert {
+    condition     = can(regex("^/providers/Microsoft.Management/managementGroups/", output.id))
+    error_message = "Management-group initiatives must use azurerm_management_group_policy_set_definition"
   }
 }
 

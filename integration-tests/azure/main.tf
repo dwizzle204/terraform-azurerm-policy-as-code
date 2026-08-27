@@ -31,3 +31,11 @@ module "definition_live" {
   policy_category = "Monitoring"
   policy_name     = "deploy_vnet_diagnostic_setting"
 }
+
+module "initiative_sub_live" {
+  source                  = "../../modules/initiative"
+  initiative_name         = "live-sub-initiative"
+  initiative_display_name = "Live Subscription Initiative"
+  # management_group_id omitted => subscription scope (P1)
+  member_definitions = [module.definition_live.definition]
+}

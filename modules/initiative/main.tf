@@ -5,6 +5,8 @@ resource "terraform_data" "set_replace" {
 }
 
 resource "azurerm_management_group_policy_set_definition" "set" {
+  count = var.management_group_id != null ? 1 : 0
+
   name                = var.initiative_name
   display_name        = var.initiative_display_name
   description         = var.initiative_description
@@ -12,6 +14,37 @@ resource "azurerm_management_group_policy_set_definition" "set" {
   policy_type         = "Custom"
   metadata            = jsonencode(local.metadata)
   parameters          = length(local.parameters) > 0 ? jsonencode(local.parameters) : null
+
+  dynamic "policy_definition_reference" {
+    for_each = local.policy_definition_reference
+
+    content {
+      policy_definition_id = policy_definition_reference.value.policy_definition_id
+      reference_id         = policy_definition_reference.value.reference_id
+      version              = policy_definition_reference.value.version
+      parameter_values     = policy_definition_reference.value.parameter_values
+      policy_group_names   = []
+    }
+  }
+
+  lifecycle {
+    replace_triggered_by = [terraform_data.set_replace]
+  }
+
+  timeouts {
+    read = "10m"
+  }
+}
+
+resource "azurerm_policy_set_definition" "sub" {
+  count = var.management_group_id == null ? 1 : 0
+
+  name         = var.initiative_name
+  display_name = var.initiative_display_name
+  description  = var.initiative_description
+  policy_type  = "Custom"
+  metadata     = jsonencode(local.metadata)
+  parameters   = length(local.parameters) > 0 ? jsonencode(local.parameters) : null
 
   dynamic "policy_definition_reference" {
     for_each = local.policy_definition_reference
