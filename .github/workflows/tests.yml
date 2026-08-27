@@ -40,6 +40,16 @@ jobs:
           tflint --init --recursive
           tflint --recursive
 
+      - name: Sequencing Guard (remediation depends_on AAD group)
+        run: |
+          for mod in def_assignment set_assignment; do
+            if ! grep -q "depends_on.*azuread_group_member" "modules/$mod/main.tf"; then
+              echo "sequencing check failed for $mod: missing depends_on for azuread_group_member"
+              exit 1
+            fi
+          done
+          echo "OK: remediation sequencing dependencies present"
+
   examples-validate:
     name: Examples Validate (backend disabled, no Azure creds)
     env:
