@@ -43,3 +43,8 @@ output "remediation_selected_references" {
   description = "The member definition reference IDs selected for remediation after effect filtering and explicit selection"
   value       = [for d in local.definitions : d.reference_id]
 }
+
+output "remediation_depends_on_group" {
+  description = "Whether remediation is configured behind module-managed group membership"
+  value       = length(var.aad_group_remediation_object_ids) > 0 && length(local.remediation_tasks) > 0
+}
