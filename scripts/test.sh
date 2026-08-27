@@ -384,15 +384,25 @@ else
 fi
 popd >/dev/null
 
-echo "== sequencing check: remediation depends on AAD group membership =="
+echo "== sequencing check: remediation depends on AAD group membership (#38) =="
+GRAPH_TMP=$(mktemp -d)
+trap 'rm -rf "$TMP" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$GRAPH_TMP"' EXIT
 for mod in def_assignment set_assignment; do
-  if ! grep -q "depends_on.*azuread_group_member" "modules/$mod/main.tf"; then
-    echo "sequencing check failed for $mod: missing depends_on for azuread_group_member"
-    FAILED+=("$mod:sequencing")
+  graph_file="$GRAPH_TMP/$mod.dot"
+  if ! (cd "modules/$mod" && "$TF" graph -type=plan -no-color >"$graph_file" 2>/dev/null); then
+    echo "sequencing check failed for $mod: terraform graph failed"
+    FAILED+=("$mod:sequencing-graph")
+    continue
   fi
+  for remediation in management_group subscription resource_group resource; do
+    if ! grep -Fq "[root] azurerm_${remediation}_policy_remediation.rem (expand)\" -> \"[root] azuread_group_member.remediation (expand)" "$graph_file"; then
+      echo "sequencing check failed for $mod: missing ${remediation} remediation dependency"
+      FAILED+=("$mod:sequencing-$remediation")
+    fi
+  done
 done
 if [ ${#FAILED[@]} -eq 0 ] || ! printf '%s\n' "${FAILED[@]}" | grep -q "sequencing"; then
-  echo "OK: remediation sequencing dependencies present"
+  echo "OK: all remediation resources depend on azuread_group_member.remediation"
 fi
 
 if [ ${#FAILED[@]} -gt 0 ]; then
