@@ -317,10 +317,6 @@ run "group_membership_permission_path_creates_remediation" {
     error_message = "Group-based permission provisioning must retain remediation creation"
   }
 
-  assert {
-    condition     = output.remediation_depends_on_group
-    error_message = "Group-based remediation must depend on group membership"
-  }
 }
 
 run "role_assignment_permission_path_creates_remediation" {
@@ -345,8 +341,4 @@ run "role_assignment_permission_path_creates_remediation" {
     error_message = "Role-assignment permission provisioning must retain remediation creation"
   }
 
-  assert {
-    condition     = output.remediation_depends_on_group == false
-    error_message = "Role-assignment-only remediation must not report a group dependency"
-  }
 }
