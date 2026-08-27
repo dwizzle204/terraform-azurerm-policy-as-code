@@ -43,6 +43,7 @@ jobs:
       - name: Sequencing Guard (all 4 remediation resources depend on AAD group)
         run: |
           for mod in def_assignment set_assignment; do
+            (cd "modules/$mod" && terraform init -backend=false -no-color >/dev/null)
             graph_file=$(mktemp)
             if ! (cd "modules/$mod" && terraform graph -type=plan -no-color >"$graph_file" 2>/dev/null); then
               echo "sequencing check failed for $mod: terraform graph failed"
