@@ -1,7 +1,18 @@
 variable "management_group_id" {
   type        = string
-  description = "The management group scope at which the initiative will be defined. Defaults to current Subscription if omitted. Changing this forces a new resource to be created. Note: if you are using azurerm_management_group to assign a value to management_group_id, be sure to use name or group_id attribute, but not id."
+  description = "The management group scope at which the initiative will be defined. Defaults to current Subscription if omitted. Changing this forces a new resource to be created. Note: if you are using azurerm_management_group to assign a value to management_group_id, be sure to use name or group_id attribute, but not id. When creating a management group and its initiative in the same configuration, set var.initiative_scope = \"management_group\" explicitly so the resource count is known at plan time."
   default     = null
+}
+
+variable "initiative_scope" {
+  type        = string
+  description = "Scope type for the initiative. Valid values are 'management_group' and 'subscription'. When null (default), scope is inferred from management_group_id. Set explicitly when management_group_id is computed (unknown at plan time)."
+  default     = null
+
+  validation {
+    condition     = var.initiative_scope == null || try(contains(["management_group", "subscription"], var.initiative_scope), false)
+    error_message = "initiative_scope must be 'management_group' or 'subscription' when set."
+  }
 }
 
 variable "initiative_name" {
@@ -226,10 +237,5 @@ locals {
     }
   )
 
-  # manually generate the initiative Id to prevent "Invalid for_each argument" on consumer modules
-  initiative_id = (
-    var.management_group_id != null ?
-    "${var.management_group_id}/providers/Microsoft.Authorization/policySetDefinitions/${var.initiative_name}" :
-    "${data.azurerm_subscription.current.id}/providers/Microsoft.Authorization/policySetDefinitions/${var.initiative_name}"
-  )
+  initiative_id = local.is_management_group_scope ? "${var.management_group_id}/providers/Microsoft.Authorization/policySetDefinitions/${var.initiative_name}" : "${data.azurerm_subscription.current.id}/providers/Microsoft.Authorization/policySetDefinitions/${var.initiative_name}"
 }

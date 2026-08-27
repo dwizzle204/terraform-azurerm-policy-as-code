@@ -24,6 +24,7 @@ variable "initiatives" {
     description            = optional(string, "")
     category               = optional(string, "General")
     management_group_id    = optional(string)
+    initiative_scope       = optional(string) # "management_group" or "subscription"; explicit when management_group_id is computed (unknown at plan)
     member_definition_keys = list(string)
     metadata               = optional(any) # free-form metadata passthrough (e.g. control IDs) (#13 review)
   }))
@@ -35,6 +36,13 @@ variable "initiatives" {
       alltrue([for mk in ini.member_definition_keys : contains(keys(var.definitions), mk)])
     ])
     error_message = "initiative member_definition_keys reference unknown definitions: ${join(", ", flatten([for k, ini in var.initiatives : [for mk in ini.member_definition_keys : "${k} -> ${mk}" if !contains(keys(var.definitions), mk)]]))}."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, ini in var.initiatives : ini.initiative_scope == null || try(contains(["management_group", "subscription"], ini.initiative_scope), false)
+    ])
+    error_message = "initiatives[].initiative_scope must be 'management_group' or 'subscription' when set."
   }
 
 }

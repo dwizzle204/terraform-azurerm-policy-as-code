@@ -4,7 +4,14 @@ resource "terraform_data" "set_replace" {
   input = local.replace_trigger
 }
 
+locals {
+  # plan-known scope selector: explicit initiative_scope wins, otherwise infer from management_group_id when known
+  is_management_group_scope = var.initiative_scope != null ? var.initiative_scope == "management_group" : var.management_group_id != null
+}
+
 resource "azurerm_management_group_policy_set_definition" "set" {
+  count = local.is_management_group_scope ? 1 : 0
+
   name                = var.initiative_name
   display_name        = var.initiative_display_name
   description         = var.initiative_description
@@ -12,6 +19,37 @@ resource "azurerm_management_group_policy_set_definition" "set" {
   policy_type         = "Custom"
   metadata            = jsonencode(local.metadata)
   parameters          = length(local.parameters) > 0 ? jsonencode(local.parameters) : null
+
+  dynamic "policy_definition_reference" {
+    for_each = local.policy_definition_reference
+
+    content {
+      policy_definition_id = policy_definition_reference.value.policy_definition_id
+      reference_id         = policy_definition_reference.value.reference_id
+      version              = policy_definition_reference.value.version
+      parameter_values     = policy_definition_reference.value.parameter_values
+      policy_group_names   = []
+    }
+  }
+
+  lifecycle {
+    replace_triggered_by = [terraform_data.set_replace]
+  }
+
+  timeouts {
+    read = "10m"
+  }
+}
+
+resource "azurerm_policy_set_definition" "sub" {
+  count = local.is_management_group_scope ? 0 : 1
+
+  name         = var.initiative_name
+  display_name = var.initiative_display_name
+  description  = var.initiative_description
+  policy_type  = "Custom"
+  metadata     = jsonencode(local.metadata)
+  parameters   = length(local.parameters) > 0 ? jsonencode(local.parameters) : null
 
   dynamic "policy_definition_reference" {
     for_each = local.policy_definition_reference
