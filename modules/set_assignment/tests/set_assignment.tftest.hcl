@@ -4,7 +4,7 @@ mock_provider "azurerm" {
     override_during = plan
   }
   mock_resource "azurerm_subscription_policy_assignment" {
-    defaults        = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyAssignments/mock_initiative" }
+    defaults        = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyAssignments/mock_initiative", identity = { principal_id = "22222222-2222-2222-2222-222222222222", tenant_id = "33333333-3333-3333-3333-333333333333", type = "SystemAssigned" } }
     override_during = plan
   }
   mock_resource "azurerm_resource_group_policy_assignment" {
@@ -620,5 +620,50 @@ run "assignment_effect_override_makes_audit_member_eligible" {
   assert {
     condition     = contains(output.remediation_selected_references, "member_with_audit_default")
     error_message = "assignment_effect = Modify should make an Audit-default member eligible for remediation"
+  }
+}
+
+run "group_membership_permission_path_creates_remediation" {
+  command = plan
+
+  variables {
+    aad_group_remediation_object_ids = ["11111111-1111-1111-1111-111111111111"]
+    remediate_effects                = ["DeployIfNotExists"]
+    initiative = merge(var.initiative, {
+      role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+      policy_definition_reference = [{
+        policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/group_test"
+        reference_id         = "group_test"
+        parameter_values     = jsonencode({ effect = { value = "DeployIfNotExists" } })
+      }]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) > 0
+    error_message = "Group-based permission provisioning must retain remediation creation"
+  }
+}
+
+run "role_assignment_permission_path_creates_remediation" {
+  command = plan
+
+  variables {
+    aad_group_remediation_object_ids = []
+    role_definition_ids              = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    remediate_effects                = ["DeployIfNotExists"]
+    initiative = merge(var.initiative, {
+      role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+      policy_definition_reference = [{
+        policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/role_test"
+        reference_id         = "role_test"
+        parameter_values     = jsonencode({ effect = { value = "DeployIfNotExists" } })
+      }]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) > 0
+    error_message = "Role-assignment permission provisioning must retain remediation creation"
   }
 }
