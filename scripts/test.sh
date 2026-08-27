@@ -306,3 +306,14 @@ if [ ${#FAILED[@]} -gt 0 ]; then
   exit 1
 fi
 echo "ALL OFFLINE GATES PASSED"
+
+echo "== sequencing check: remediation depends on AAD group membership =="
+for mod in def_assignment set_assignment; do
+  if ! grep -q "depends_on.*azuread_group_member" "modules/$mod/main.tf"; then
+    echo "sequencing check failed for $mod: missing depends_on for azuread_group_member"
+    FAILED+=("$mod:sequencing")
+  fi
+done
+if [ ${#FAILED[@]} -eq 0 ] || ! printf '%s\n' "${FAILED[@]}" | grep -q "sequencing"; then
+  echo "OK: remediation sequencing dependencies present"
+fi

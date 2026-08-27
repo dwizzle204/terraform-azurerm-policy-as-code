@@ -226,3 +226,17 @@ run "effect_conflicts_are_ignored_when_merge_effects_disabled" {
   }
 }
 
+
+run "malformed_member_definitions_rejected" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      { id = "not-an-object" }
+    ]
+  }
+
+  expect_failures = [
+    var.member_definitions,
+  ]
+}

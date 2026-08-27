@@ -687,3 +687,20 @@ run "role_assignment_permission_path_creates_remediation" {
     error_message = "Role-assignment-only remediation must not report a group dependency"
   }
 }
+
+run "legacy_map_shaped_overrides_rejected" {
+  command = plan
+
+  variables {
+    overrides = [
+      {
+        effect    = "Deny"
+        selectors = { in = ["a"] }
+      }
+    ]
+  }
+
+  expect_failures = [
+    var.overrides,
+  ]
+}

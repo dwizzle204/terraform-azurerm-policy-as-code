@@ -28,7 +28,3 @@ output "parameters" {
   value       = local.parameters
 }
 
-output "remediation_depends_on_group" {
-  description = "Whether remediation is configured behind module-managed group membership"
-  value       = length(var.aad_group_remediation_object_ids) > 0 && local.remediation_id != null
-}
