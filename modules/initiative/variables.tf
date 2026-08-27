@@ -10,7 +10,7 @@ variable "initiative_scope" {
   default     = null
 
   validation {
-    condition     = var.initiative_scope == null || contains(["management_group", "subscription"], var.initiative_scope)
+    condition     = var.initiative_scope == null || try(contains(["management_group", "subscription"], var.initiative_scope), false)
     error_message = "initiative_scope must be 'management_group' or 'subscription' when set."
   }
 }

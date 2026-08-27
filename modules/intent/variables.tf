@@ -40,7 +40,7 @@ variable "initiatives" {
 
   validation {
     condition = alltrue([
-      for k, ini in var.initiatives : ini.initiative_scope == null || contains(["management_group", "subscription"], ini.initiative_scope)
+      for k, ini in var.initiatives : ini.initiative_scope == null || try(contains(["management_group", "subscription"], ini.initiative_scope), false)
     ])
     error_message = "initiatives[].initiative_scope must be 'management_group' or 'subscription' when set."
   }
