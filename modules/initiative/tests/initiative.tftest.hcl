@@ -198,3 +198,31 @@ run "conflicting_schemas_reported_and_escape_hatch_works" {
   }
 }
 
+run "effect_conflicts_are_ignored_when_merge_effects_disabled" {
+  command = plan
+
+  variables {
+    merge_effects = false
+    member_definitions = [
+      merge(var.member_definitions[0], {
+        name       = "effect_a"
+        parameters = jsonencode({ effect = { type = "String", defaultValue = "Audit" } })
+      }),
+      merge(var.member_definitions[1], {
+        name       = "effect_b"
+        parameters = jsonencode({ effect = { type = "String", defaultValue = "Deny" } })
+      })
+    ]
+  }
+
+  assert {
+    condition     = output.parameter_conflicts == {}
+    error_message = "Effect schemas may differ when merge_effects is false"
+  }
+
+  assert {
+    condition     = contains(keys(output.parameters), "effect_effect_a") && contains(keys(output.parameters), "effect_effect_b")
+    error_message = "Separate effect parameters must be emitted when effect merging is disabled"
+  }
+}
+

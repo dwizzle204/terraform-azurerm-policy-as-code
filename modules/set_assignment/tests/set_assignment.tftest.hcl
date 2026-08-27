@@ -235,7 +235,7 @@ run "default_remediation_is_opt_in" {
   }
 }
 
-run "explicit_reference_ids_override_effect_resolution" {
+run "explicit_reference_ids_reject_known_non_remediable_effect" {
   command = plan
 
   variables {
@@ -254,8 +254,8 @@ run "explicit_reference_ids_override_effect_resolution" {
   }
 
   assert {
-    condition     = length(output.remediation_tasks) == 1 && output.remediation_tasks[0].policy_definition_reference_id == "audit_member"
-    error_message = "Explicitly listed reference ids are remediated regardless of resolved effect"
+    condition     = length(output.remediation_tasks) == 0
+    error_message = "Explicitly listed Audit references must not bypass remediation effect safety"
   }
 }
 
@@ -573,8 +573,9 @@ run "unresolvable_effect_is_classified_not_remediable" {
   command = plan
 
   variables {
-    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
-    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids       = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    remediate_effects         = ["DeployIfNotExists", "Modify"]
+    remediation_reference_ids = ["member_without_default"]
     initiative = merge(var.initiative, {
       parameters = jsonencode({
         effect = { type = "String" } # no defaultValue, no assignment override -> unresolvable
@@ -590,7 +591,34 @@ run "unresolvable_effect_is_classified_not_remediable" {
   }
 
   assert {
-    condition     = !contains(output.remediation_selected_references, "member_without_default")
-    error_message = "Members whose effect cannot be resolved (no default, no assignment value) must not be classified as remediable"
+    condition     = contains(output.remediation_selected_references, "member_without_default")
+    error_message = "Explicit references may select members whose effect cannot be resolved"
+  }
+}
+
+run "assignment_effect_override_makes_audit_member_eligible" {
+  command = plan
+
+  variables {
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    assignment_effect   = "Modify"
+    initiative = merge(var.initiative, {
+      parameters = jsonencode({
+        effect = { type = "String", defaultValue = "Audit" }
+      })
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/member_with_audit_default"
+          reference_id         = "member_with_audit_default"
+          parameter_values     = jsonencode({ effect = { value = "[parameters('effect')]" } })
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = contains(output.remediation_selected_references, "member_with_audit_default")
+    error_message = "assignment_effect = Modify should make an Audit-default member eligible for remediation"
   }
 }

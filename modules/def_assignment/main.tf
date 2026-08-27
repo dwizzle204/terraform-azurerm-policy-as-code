@@ -276,7 +276,7 @@ resource "azuread_group_member" "remediation" {
 ## remediation tasks ##
 resource "azurerm_management_group_policy_remediation" "rem" {
   # issue #3: module-managed permissions must exist before remediation starts
-  depends_on           = [azurerm_role_assignment.remediation]
+  depends_on           = [azurerm_role_assignment.remediation, azuread_group_member.remediation]
   count                = local.create_remediation + local.remediate.mg > 1 ? 1 : 0
   name                 = lower(var.definition.name)
   management_group_id  = local.remediation_scope
@@ -297,7 +297,7 @@ resource "azurerm_management_group_policy_remediation" "rem" {
 
 resource "azurerm_subscription_policy_remediation" "rem" {
   # issue #3: module-managed permissions must exist before remediation starts
-  depends_on              = [azurerm_role_assignment.remediation]
+  depends_on              = [azurerm_role_assignment.remediation, azuread_group_member.remediation]
   count                   = local.create_remediation + local.remediate.sub > 1 ? 1 : 0
   name                    = lower(var.definition.name)
   subscription_id         = local.remediation_scope
@@ -319,7 +319,7 @@ resource "azurerm_subscription_policy_remediation" "rem" {
 
 resource "azurerm_resource_group_policy_remediation" "rem" {
   # issue #3: module-managed permissions must exist before remediation starts
-  depends_on              = [azurerm_role_assignment.remediation]
+  depends_on              = [azurerm_role_assignment.remediation, azuread_group_member.remediation]
   count                   = local.create_remediation + local.remediate.rg > 1 ? 1 : 0
   name                    = lower(var.definition.name)
   resource_group_id       = local.remediation_scope
@@ -341,7 +341,7 @@ resource "azurerm_resource_group_policy_remediation" "rem" {
 
 resource "azurerm_resource_policy_remediation" "rem" {
   # issue #3: module-managed permissions must exist before remediation starts
-  depends_on              = [azurerm_role_assignment.remediation]
+  depends_on              = [azurerm_role_assignment.remediation, azuread_group_member.remediation]
   count                   = local.create_remediation + local.remediate.resource > 1 ? 1 : 0
   name                    = lower(var.definition.name)
   resource_id             = local.remediation_scope
