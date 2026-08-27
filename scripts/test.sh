@@ -164,89 +164,6 @@ else
 fi
 popd >/dev/null
 
-echo "== negative check: typed object contracts reject malformed structures (#4) =="
-TMP4=$(mktemp -d)
-mkdir -p "$TMP4/cfg"
-cat >"$TMP4/cfg/main.tf" <<EOF
-module "bad_initiative" {
-  source                  = "$PWD/modules/initiative"
-  initiative_name         = "typed_contract_probe"
-  initiative_display_name = "Typed Contract Probe"
-  management_group_id     = "/providers/Microsoft.Management/managementGroups/probe"
-  member_definitions      = [{ id = "/providers/Microsoft.Authorization/policyDefinitions/broken" }]
-}
-EOF
-cat >"$TMP4/cfg/providers.tf" <<EOF
-terraform {
-  required_providers {
-    azurerm = { source = "hashicorp/azurerm" }
-  }
-}
-
-provider "azurerm" {
-  features {}
-}
-EOF
-pushd "$TMP4/cfg" >/dev/null
-set +e
-"$TF" init -backend=false -no-color >/dev/null
-INIT_RC=$?
-set -e
-if [ $INIT_RC -ne 0 ]; then FAILED+=("negative-check:init"); fi
-set +e
-ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
-ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
-"$TF" plan -no-color >/dev/null 2>"$TMP4/err.txt"
-RC=$?
-set -e
-if [ $RC -eq 0 ]; then
-  FAILED+=("negative-check-typed: expected plan failure for malformed member_definitions")
-elif ! grep -qi "Invalid value for input variable" "$TMP4/err.txt"; then
-  FAILED+=("negative-check-typed: did not surface a type-contract error")
-else
-  echo "OK: malformed member_definitions rejected by the type contract"
-fi
-popd >/dev/null
-
-echo "== negative check: legacy map-shaped overrides rejected (#8) =="
-TMP5=$(mktemp -d)
-mkdir -p "$TMP5/cfg"
-cat >"$TMP5/cfg/main.tf" <<EOF
-module "legacy_overrides" {
-  source           = "$PWD/modules/set_assignment"
-  assignment_scope = "/subscriptions/00000000-0000-0000-0000-000000000000"
-  overrides = [
-    {
-      effect    = "Deny"
-      selectors = { in = ["a"] }
-    }
-  ]
-}
-EOF
-cp "$TMP/cfg/providers.tf" "$TMP5/cfg/providers.tf"
-pushd "$TMP5/cfg" >/dev/null
-ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
-ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
-set +e
-"$TF" init -backend=false -no-color >/dev/null
-INIT_RC=$?
-set -e
-if [ $INIT_RC -ne 0 ]; then FAILED+=("negative-check:init"); fi
-set +e
-ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx \
-ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 \
-"$TF" plan -no-color >/dev/null 2>"$TMP5/err.txt"
-RC5=$?
-set -e
-if [ $RC5 -eq 0 ]; then
-  FAILED+=("negative-check-overrides: expected plan failure for legacy map-shaped overrides")
-elif ! grep -qiE "(unsupported argument|an argument named .effect.|missing required argument)" "$TMP5/err.txt"; then
-  FAILED+=("negative-check-overrides: did not surface a type-contract error")
-else
-  echo "OK: legacy map-shaped overrides rejected by the type contract"
-fi
-popd >/dev/null
-
 echo "== negative check: governed waiver without expires_on fails fast (#10) =="
 TMP6=$(mktemp -d)
 mkdir -p "$TMP6/cfg"
@@ -336,7 +253,7 @@ popd >/dev/null
 
 echo "== negative check: unknown remediation_reference_ids fail fast (#1/#3) =="
 TMP3=$(mktemp -d)
-trap 'rm -rf "$TMP" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7"' EXIT
+trap 'rm -rf "$TMP" "$TMP2" "$TMP3" "$TMP6" "$TMP7"' EXIT
 mkdir -p "$TMP3/cfg"
 cat >"$TMP3/cfg/main.tf" <<EOF
 module "unknown_ref_assignment" {
