@@ -1,10 +1,10 @@
+# TEMPLATE ONLY: copy this workflow into a live-use repository, configure its
+# Azure credentials and backend settings, and review every deployment step before
+# enabling it. This file is not an active pipeline for this repository.
 name: ci
 
-# LIVE Azure validation pipeline. Requires deployment secrets and therefore
-# runs only on pushes to main; PR validation is handled by tests.yml (issue #16).
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   ci:

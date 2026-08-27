@@ -4,7 +4,7 @@ mock_provider "azurerm" {
     override_during = plan
   }
   mock_resource "azurerm_subscription_policy_assignment" {
-    defaults        = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyAssignments/mock_definition" }
+    defaults        = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyAssignments/mock_definition", identity = { principal_id = "22222222-2222-2222-2222-222222222222", tenant_id = "33333333-3333-3333-3333-333333333333", type = "SystemAssigned" } }
     override_during = plan
   }
   mock_resource "azurerm_resource_group_policy_assignment" {
@@ -294,4 +294,49 @@ run "def_assignment_invalid_override_kind_fails_validation" {
   expect_failures = [
     var.overrides,
   ]
+}
+
+run "group_membership_permission_path_creates_remediation" {
+  command = plan
+
+  variables {
+    aad_group_remediation_object_ids = ["11111111-1111-1111-1111-111111111111"]
+    remediate_effects                = ["DeployIfNotExists"]
+    definition = merge(var.definition, {
+      policy_rule = jsonencode({ if = {}, then = { effect = "DeployIfNotExists", details = { roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"] } } })
+    })
+  }
+
+  assert {
+    condition     = length(resource.azuread_group_member.remediation) == 1
+    error_message = "Group-based permission provisioning must create the group membership prerequisite"
+  }
+
+  assert {
+    condition     = output.remediation_id != ""
+    error_message = "Group-based permission provisioning must retain remediation creation"
+  }
+}
+
+run "role_assignment_permission_path_creates_remediation" {
+  command = plan
+
+  variables {
+    aad_group_remediation_object_ids = []
+    role_definition_ids              = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    remediate_effects                = ["DeployIfNotExists"]
+    definition = merge(var.definition, {
+      policy_rule = jsonencode({ if = {}, then = { effect = "DeployIfNotExists" } })
+    })
+  }
+
+  assert {
+    condition     = length(resource.azurerm_role_assignment.remediation) == 1
+    error_message = "Role-assignment permission provisioning must create the RBAC prerequisite"
+  }
+
+  assert {
+    condition     = output.remediation_id != ""
+    error_message = "Role-assignment permission provisioning must retain remediation creation"
+  }
 }
