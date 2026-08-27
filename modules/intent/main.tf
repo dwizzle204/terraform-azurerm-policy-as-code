@@ -54,6 +54,7 @@ module "initiatives" {
   initiative_description  = each.value.description
   initiative_category     = each.value.category
   management_group_id     = each.value.management_group_id
+  initiative_scope        = try(each.value.initiative_scope, null)
   initiative_metadata     = each.value.metadata
 
   member_definitions = [for m in each.value.member_definition_keys : module.definitions[m].definition]
