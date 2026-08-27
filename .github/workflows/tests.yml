@@ -40,15 +40,22 @@ jobs:
           tflint --init --recursive
           tflint --recursive
 
-      - name: Sequencing Guard (remediation depends_on AAD group)
+      - name: Sequencing Guard (all 4 remediation resources depend on AAD group)
         run: |
           for mod in def_assignment set_assignment; do
-            if ! grep -q "depends_on.*azuread_group_member" "modules/$mod/main.tf"; then
-              echo "sequencing check failed for $mod: missing depends_on for azuread_group_member"
+            graph_file=$(mktemp)
+            if ! (cd "modules/$mod" && terraform graph -type=plan -no-color >"$graph_file" 2>/dev/null); then
+              echo "sequencing check failed for $mod: terraform graph failed"
               exit 1
             fi
+            for remediation in management_group subscription resource_group resource; do
+              if ! grep -Fq "[root] azurerm_${remediation}_policy_remediation.rem (expand)\" -> \"[root] azuread_group_member.remediation (expand)" "$graph_file"; then
+                echo "sequencing check failed for $mod: missing ${remediation} remediation dependency"
+                exit 1
+              fi
+            done
           done
-          echo "OK: remediation sequencing dependencies present"
+          echo "OK: all remediation resources depend on azuread_group_member.remediation"
 
   examples-validate:
     name: Examples Validate (backend disabled, no Azure creds)
