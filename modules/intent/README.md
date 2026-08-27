@@ -18,6 +18,11 @@ deterministic. No new resource types — state lives in the underlying modules.
 Dangling references (unknown member/initiative/assignment keys) fail at plan
 time with a diagnostic naming every offender.
 
+Intent-created assignments always enable collision-resistant naming. Their
+physical names include a deterministic hash suffix, preventing long logical
+keys from colliding at management-group scope. Direct assignment modules retain
+their legacy `collision_resistant_naming = false` default for compatibility.
+
 ## Outputs
 
 | Name | Description |

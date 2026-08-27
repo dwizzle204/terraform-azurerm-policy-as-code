@@ -123,15 +123,16 @@ run "governed_waiver_with_expiry_renders_governance" {
     exemption_category = "Waiver"
     expires_on         = "2030-01-31"
     governed = {
-      owner              = "platform-team"
-      tracking_reference = "RISK-2914"
-      reason             = "Legacy dependency incompatible with control"
+      owner               = "platform-team"
+      tracking_reference  = "RISK-2914"
+      reason              = "Legacy dependency incompatible with control"
+      governed_created_on = "2026-01-15"
     }
   }
 
   assert {
-    condition     = output.governance.owner == "platform-team" && output.governance.trackingReference == "RISK-2914"
-    error_message = "Governed metadata must carry owner and tracking reference (#10)"
+    condition     = output.governance.owner == "platform-team" && output.governance.trackingReference == "RISK-2914" && output.governance.created == "2026-01-15"
+    error_message = "Governed metadata must carry stable governance fields and creation date (#10)"
   }
 
 }

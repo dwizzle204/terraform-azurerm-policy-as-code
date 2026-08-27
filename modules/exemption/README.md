@@ -166,6 +166,7 @@ module "exemption" {
     approver           = "security-leads"
     tracking_reference = "RISK-2914"
     reason             = "Legacy dependency incompatible with control"
+    governed_created_on = "2026-01-15" # stable, caller-supplied creation date
   }
 }
 ```
@@ -177,12 +178,13 @@ Rules when `governed` is set:
 | `Waiver` requires `expires_on` | plan-time error |
 | `Mitigated` requires `governed.mitigation` | plan-time error |
 | `expires_on` must be `yyyy-mm-dd` (future dates enforced by Azure at apply) | plan-time error |
+| `governed_created_on`, when supplied, must be `yyyy-mm-dd` | plan-time error |
 
 Fields render into exemption metadata as `owner`, `requester`, `approver`,
-`trackingReference`, `reason`, `mitigation`, `created`. Note: `created` uses
-`timestamp()`, so governed exemptions refresh their metadata on every plan
-(in-place update, no replacement). Omit `governed` for simple exemptions —
-behavior is unchanged.
+`trackingReference`, `reason`, and `mitigation`. The optional
+`governed_created_on` is rendered as `created`; it is caller-supplied and stable,
+so governed exemptions do not incur perpetual metadata drift. Omit `governed`
+for simple exemptions — behavior is unchanged.
 
 Data-driven PR-based maintenance example:
 

@@ -78,12 +78,13 @@ variable "exemptions" {
     policy_reference_ids = optional(list(string), [])
     metadata             = optional(any)
     governed = optional(object({
-      owner              = string
-      tracking_reference = string
-      reason             = string
-      requester          = optional(string)
-      approver           = optional(string)
-      mitigation         = optional(string)
+      owner               = string
+      tracking_reference  = string
+      reason              = string
+      requester           = optional(string)
+      approver            = optional(string)
+      mitigation          = optional(string)
+      governed_created_on = optional(string)
     }))
   }))
   default     = {}
