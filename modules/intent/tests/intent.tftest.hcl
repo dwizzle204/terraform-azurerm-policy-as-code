@@ -284,7 +284,7 @@ run "heterogeneous_assignment_parameters_accepted" {
   }
 
   assert {
-    condition     = output.assignment_names["mixed_params"] == "mixed_params"
-    error_message = "Heterogeneous parameter values must be accepted and the logical key must default the assignment name (#13 review)"
+    condition     = output.assignment_names["mixed_params"] != "mixed_params" && can(regex("-[a-z0-9]{8}$", output.assignment_names["mixed_params"]))
+    error_message = "Intent assignments must use deterministic collision-resistant names by default"
   }
 }

@@ -76,6 +76,9 @@ module "assignments" {
   remediation_reference_ids   = each.value.remediation_reference_ids
   role_definition_ids         = each.value.role_definition_ids
   assignment_metadata         = each.value.metadata
+  # Intent has no legacy naming compatibility requirement; always prevent
+  # assignment collisions with a deterministic hash suffix.
+  collision_resistant_naming = true
 
   initiative = module.initiatives[each.value.initiative_key].initiative
 }
