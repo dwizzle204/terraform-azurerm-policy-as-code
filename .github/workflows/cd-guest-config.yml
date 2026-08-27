@@ -1,9 +1,8 @@
+# TEMPLATE ONLY: copy this workflow into a live-use repository, configure its
+# Azure credentials and machine-configuration prerequisites, and review the
+# apply/destroy steps before enabling it. This file is not active here.
 name: cd-machine-config
 on:
-  push:
-    branches: [main]
-    paths:
-      - "examples-machine-config"
   workflow_dispatch:
 
 jobs:

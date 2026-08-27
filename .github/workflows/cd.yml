@@ -1,9 +1,8 @@
-# deployment pipeline - post-merge only (PR validation is handled by tests.yml)
+# TEMPLATE ONLY: copy this workflow into a live-use repository, configure its
+# Azure credentials and backend settings, and review the apply step before
+# enabling it. This file is not an active deployment pipeline here.
 name: cd
 on:
-  push:
-    branches: [main]
-
   workflow_dispatch:
 
 jobs:
