@@ -4,8 +4,13 @@ resource "terraform_data" "set_replace" {
   input = local.replace_trigger
 }
 
+locals {
+  # plan-known scope selector: explicit initiative_scope wins, otherwise infer from management_group_id when known
+  is_management_group_scope = var.initiative_scope != null ? var.initiative_scope == "management_group" : var.management_group_id != null
+}
+
 resource "azurerm_management_group_policy_set_definition" "set" {
-  count = var.management_group_id != null ? 1 : 0
+  count = local.is_management_group_scope ? 1 : 0
 
   name                = var.initiative_name
   display_name        = var.initiative_display_name
@@ -37,7 +42,7 @@ resource "azurerm_management_group_policy_set_definition" "set" {
 }
 
 resource "azurerm_policy_set_definition" "sub" {
-  count = var.management_group_id == null ? 1 : 0
+  count = local.is_management_group_scope ? 0 : 1
 
   name         = var.initiative_name
   display_name = var.initiative_display_name
