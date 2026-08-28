@@ -137,6 +137,60 @@ run "governed_waiver_with_expiry_renders_governance" {
 
 }
 
+run "governed_waiver_past_expiry_fails" {
+  command = plan
+
+  variables {
+    exemption_category = "Waiver"
+    expires_on         = "2020-01-01"
+    governed = {
+      owner              = "platform-team"
+      tracking_reference = "RISK-2914"
+      reason             = "past date test"
+    }
+  }
+
+  expect_failures = [
+    var.expires_on,
+  ]
+}
+
+run "governed_waiver_today_expiry_fails" {
+  command = plan
+
+  variables {
+    exemption_category = "Waiver"
+    expires_on         = formatdate("YYYY-MM-DD", timestamp())
+    governed = {
+      owner              = "platform-team"
+      tracking_reference = "RISK-2914"
+      reason             = "today date test"
+    }
+  }
+
+  expect_failures = [
+    var.expires_on,
+  ]
+}
+
+run "governed_waiver_invalid_calendar_fails" {
+  command = plan
+
+  variables {
+    exemption_category = "Waiver"
+    expires_on         = "2026-02-30"
+    governed = {
+      owner              = "platform-team"
+      tracking_reference = "RISK-2914"
+      reason             = "invalid calendar test"
+    }
+  }
+
+  expect_failures = [
+    var.expires_on,
+  ]
+}
+
 # waiver-without-expiry covered by scripts/test.sh negative check; mitigated-without-mitigation by TMP7 check
 # covered by the scripts/test.sh negative checks — plan-time file() errors
 # abort terraform test runs rather than failing assertions

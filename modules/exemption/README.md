@@ -175,9 +175,9 @@ Rules when `governed` is set:
 
 | Rule | Diagnostic |
 |------|------------|
-| `Waiver` requires `expires_on` | plan-time error |
+| `Waiver` (governed) requires `expires_on` as a future date strictly after the plan date | plan-time error |
 | `Mitigated` requires `governed.mitigation` | plan-time error |
-| `expires_on` must be `yyyy-mm-dd` (future dates enforced by Azure at apply) | plan-time error |
+| `expires_on` must be `yyyy-mm-dd` and for governed waivers strictly after the plan date (today fails) | plan-time error |
 | `governed_created_on`, when supplied, must be `yyyy-mm-dd` | plan-time error |
 
 Fields render into exemption metadata as `owner`, `requester`, `approver`,
