@@ -22,6 +22,55 @@ variable "definitions" {
     ])
     error_message = "definitions[].source must be \"custom\" or \"builtin\"."
   }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.definitions : v.parameters == null || (
+        can({ for kk, vv in v.parameters : kk => vv }) && !can(tolist(v.parameters))
+        ) || (
+        can(jsondecode(v.parameters)) && can({ for kk, vv in jsondecode(v.parameters) : kk => vv }) && !can(tolist(jsondecode(v.parameters)))
+      )
+    ])
+    error_message = "definitions[].parameters must be an HCL object or JSON-object string."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.definitions : v.policy_rule == null || (
+        can({ for kk, vv in v.policy_rule : kk => vv }) && !can(tolist(v.policy_rule))
+        ) || (
+        can(jsondecode(v.policy_rule)) && can({ for kk, vv in jsondecode(v.policy_rule) : kk => vv }) && !can(tolist(jsondecode(v.policy_rule)))
+      )
+    ])
+    error_message = "definitions[].policy_rule must be an HCL object or JSON-object string."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.definitions : v.metadata == null || (
+        can({ for kk, vv in v.metadata : kk => vv }) && !can(tolist(v.metadata))
+        ) || (
+        can(jsondecode(v.metadata)) && can({ for kk, vv in jsondecode(v.metadata) : kk => vv }) && !can(tolist(jsondecode(v.metadata)))
+      )
+    ])
+    error_message = "definitions[].metadata must be an HCL object or JSON-object string."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.definitions :
+      !(coalesce(v.source, "custom") == "builtin" && v.version != null && (v.parameters == null || v.policy_rule == null))
+    ])
+    error_message = "Pinned built-in definitions (source = \"builtin\" with version set) must supply explicit parameters and policy_rule."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.definitions :
+      !(coalesce(v.source, "custom") == "builtin" && v.version != null && v.mode == null)
+    ])
+    error_message = "Pinned built-in definitions with version set should supply explicit mode when mode-specific behavior is needed."
+  }
   validation {
     condition = alltrue([
       for k, v in var.definitions :

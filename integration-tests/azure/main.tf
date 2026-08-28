@@ -60,6 +60,9 @@ module "intent_builtin_live" {
     builtin_assign = {
       initiative_key = "builtin_test"
       scope          = "/subscriptions/${var.test_subscription_id}"
+      parameters = {
+        listOfAllowedLocations = ["eastus"]
+      }
     }
   }
   exemptions = {

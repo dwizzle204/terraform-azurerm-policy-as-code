@@ -200,7 +200,7 @@ locals {
     (var.metadata != null ? jsonencode(local.user_metadata_decoded) : null)
   ) : "{}"
 
-  user_metadata_decoded = try(jsondecode(coalesce(null, var.metadata, "{}")), { for k, v in var.metadata : k => v })
+  user_metadata_decoded = var.metadata == null ? {} : try(jsondecode(var.metadata), { for k, v in var.metadata : k => v })
 
   # generate reference Ids when unknown, assumes the set was created with the initiative module
   policy_definition_reference_ids = var.camel_case_references == true ? [for name in var.policy_definition_reference_ids :
