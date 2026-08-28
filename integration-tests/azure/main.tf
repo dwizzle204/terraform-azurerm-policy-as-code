@@ -75,9 +75,12 @@ module "intent_builtin_live" {
   }
 }
 
-# Custom initiative assignment at subscription scope
-module "assignment_live" {
-  source           = "../../modules/def_assignment"
-  assignment_scope = "/subscriptions/${var.test_subscription_id}"
-  definition       = module.definition_live.definition
-}
+# NOTE: deploy_vnet_diagnostic_setting requires parameters without defaultValue
+# (workspaceId, storageAccountId, eventHubAuthorizationRuleId, eventHubName).
+# This live assignment is intentionally commented out until disposable
+# fixtures exist — enabling it without parameters fails at apply (Codex P2 on PR #52).
+# module "assignment_live" {
+#   source           = "../../modules/def_assignment"
+#   assignment_scope = "/subscriptions/${var.test_subscription_id}"
+#   definition       = module.definition_live.definition
+# }
