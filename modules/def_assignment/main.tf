@@ -256,7 +256,7 @@ resource "azurerm_resource_policy_assignment" "def" {
 
 ## role assignments ##
 resource "azurerm_role_assignment" "remediation" {
-  for_each                         = { for i in local.role_definition_ids : split("-", basename(i))[0] => i }
+  for_each                         = { for i in local.role_definition_ids : md5(lower(i)) => i }
   scope                            = coalesce(var.role_assignment_scope, var.assignment_scope)
   role_definition_id               = each.value
   principal_id                     = local.assignment.identity[0].principal_id
@@ -266,7 +266,7 @@ resource "azurerm_role_assignment" "remediation" {
 ## aad group memberships ##
 resource "azuread_group_member" "remediation" {
   for_each = {
-    for i in var.aad_group_remediation_object_ids : split("-", basename(i))[0] => i
+    for i in var.aad_group_remediation_object_ids : md5(lower(i)) => i
     if try(local.identity_type.type, "") == "SystemAssigned"
   }
   group_object_id  = each.value
