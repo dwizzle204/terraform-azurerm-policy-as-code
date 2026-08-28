@@ -1,8 +1,7 @@
 # Compatibility Matrix
 
 Single source of truth for the Terraform and provider versions this repository
-is validated against. All six modules (`definition`, `initiative`,
-`exemption`, `def_assignment`, `set_assignment`) declare identical constraints.
+is validated against. All six modules (`definition`, `initiative`, `exemption`, `def_assignment`, `set_assignment`, `intent`) declare identical constraints.
 
 | Component | Minimum | Tested | Notes |
 |-----------|---------|--------|-------|

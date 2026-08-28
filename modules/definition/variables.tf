@@ -150,15 +150,20 @@ locals {
   parameters   = local.parameters_canonical
   policy_rule  = local.policy_rule_canonical
 
+  # normalize JSON-string inputs BEFORE selection so coalesce never mixes string/object types (#51)
+  policy_metadata_normalized   = var.policy_metadata == null ? null : try(jsondecode(var.policy_metadata), var.policy_metadata)
+  policy_parameters_normalized = var.policy_parameters == null ? null : try(jsondecode(var.policy_parameters), var.policy_parameters)
+  policy_rule_normalized       = var.policy_rule == null ? null : try(jsondecode(var.policy_rule), var.policy_rule)
+
   # normalize JSON-string inputs to decoded objects so the resource boundary
   # jsonencode() never produces a double-encoded payload (#4)
   metadata_canonical    = try(jsondecode(local.metadata_raw), local.metadata_raw)
   parameters_canonical  = try(jsondecode(local.parameters_raw), local.parameters_raw)
   policy_rule_canonical = try(jsondecode(local.policy_rule_raw), local.policy_rule_raw)
 
-  metadata_raw    = coalesce(null, var.policy_metadata, try((local.policy_object).properties.metadata, merge({ category = local.category }, { version = local.version })))
-  parameters_raw  = coalesce(null, var.policy_parameters, try((local.policy_object).properties.parameters, {}))
-  policy_rule_raw = coalesce(var.policy_rule, try((local.policy_object).properties.policyRule, null))
+  metadata_raw    = coalesce(null, local.policy_metadata_normalized, try((local.policy_object).properties.metadata, merge({ category = local.category }, { version = local.version })))
+  parameters_raw  = coalesce(null, local.policy_parameters_normalized, try((local.policy_object).properties.parameters, {}))
+  policy_rule_raw = coalesce(local.policy_rule_normalized, try((local.policy_object).properties.policyRule, null))
 
   # manually generate the definition Id to prevent "Invalid for_each argument" on set_assignment plan/apply
   # deterministic name suffix: identical inputs (logical name + merged

@@ -13,7 +13,8 @@ variable "definitions" {
     metadata            = optional(any)    # free-form metadata passthrough (e.g. control IDs) (#13 review)
   }))
   default     = {}
-  description = "Map of logical definition key -> custom (library/file) or built-in reference. Custom: exactly one of file_path or (category + policy_name). Built-in (source = \"builtin\"): definition_id is required; version is optional where AzureRM supports it."
+  description = "Map of logical definition key -> custom (library/file) or built-in reference. Custom: exactly one of file_path or (category + policy_name). Built-in (source = \"builtin\"): definition_id is required; version is optional where AzureRM supports it. Pinned built-ins (version set) should supply explicit parameters/policy_rule/mode where remediation or mode-specific behavior is needed, as current-version hydration is not used for pinned references."
+
   validation {
     condition = alltrue([
       for k, v in var.definitions :

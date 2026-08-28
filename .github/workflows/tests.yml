@@ -16,9 +16,9 @@ jobs:
       TF_INPUT: false
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
 
-      - uses: hashicorp/setup-terraform@v2
+      - uses: hashicorp/setup-terraform@633666f66e0061ca3b725c73b2ec20cd13a8fdd1 # v2
         with:
           terraform_version: ~1.15.0
           terraform_wrapper: false
@@ -40,7 +40,7 @@ jobs:
           tflint --init --recursive
           tflint --recursive
 
-      - name: Sequencing Guard (all 4 remediation resources depend on AAD group)
+      - name: Sequencing Guard (all 4 remediation resources depend on AAD group and RBAC)
         run: |
           for mod in def_assignment set_assignment; do
             (cd "modules/$mod" && terraform init -backend=false -no-color >/dev/null)
@@ -51,12 +51,16 @@ jobs:
             fi
             for remediation in management_group subscription resource_group resource; do
               if ! grep -Fq "[root] azurerm_${remediation}_policy_remediation.rem (expand)\" -> \"[root] azuread_group_member.remediation (expand)" "$graph_file"; then
-                echo "sequencing check failed for $mod: missing ${remediation} remediation dependency"
+                echo "sequencing check failed for $mod: missing ${remediation} AAD group dependency"
+                exit 1
+              fi
+              if ! grep -Fq "[root] azurerm_${remediation}_policy_remediation.rem (expand)\" -> \"[root] azurerm_role_assignment.remediation (expand)" "$graph_file"; then
+                echo "sequencing check failed for $mod: missing ${remediation} RBAC dependency"
                 exit 1
               fi
             done
           done
-          echo "OK: all remediation resources depend on azuread_group_member.remediation"
+          echo "OK: all remediation resources depend on both azuread_group_member and azurerm_role_assignment"
 
   examples-validate:
     name: Examples Validate (backend disabled, no Azure creds)
@@ -68,9 +72,9 @@ jobs:
       run:
         working-directory: examples
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
 
-      - uses: hashicorp/setup-terraform@v2
+      - uses: hashicorp/setup-terraform@633666f66e0061ca3b725c73b2ec20cd13a8fdd1 # v2
         with:
           terraform_version: ~1.15.0
           terraform_wrapper: false
@@ -91,9 +95,9 @@ jobs:
       run:
         working-directory: examples-intent
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
 
-      - uses: hashicorp/setup-terraform@v2
+      - uses: hashicorp/setup-terraform@633666f66e0061ca3b725c73b2ec20cd13a8fdd1 # v2
         with:
           terraform_version: ~1.15.0
           terraform_wrapper: false
@@ -114,9 +118,9 @@ jobs:
       run:
         working-directory: examples-machine-config
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
 
-      - uses: hashicorp/setup-terraform@v2
+      - uses: hashicorp/setup-terraform@633666f66e0061ca3b725c73b2ec20cd13a8fdd1 # v2
         with:
           terraform_version: ~1.15.0
           terraform_wrapper: false
@@ -142,9 +146,9 @@ jobs:
       run:
         working-directory: modules/${{ matrix.module }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
 
-      - uses: hashicorp/setup-terraform@v2
+      - uses: hashicorp/setup-terraform@633666f66e0061ca3b725c73b2ec20cd13a8fdd1 # v2
         with:
           terraform_version: ${{ matrix.terraform_version }}
           terraform_wrapper: false

@@ -384,7 +384,7 @@ else
 fi
 popd >/dev/null
 
-echo "== sequencing check: remediation depends on AAD group membership (#38) =="
+echo "== sequencing check: remediation depends on AAD group and RBAC (#38) =="
 GRAPH_TMP=$(mktemp -d)
 trap 'rm -rf "$TMP" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$GRAPH_TMP"' EXIT
 for mod in def_assignment set_assignment; do
@@ -396,8 +396,12 @@ for mod in def_assignment set_assignment; do
   fi
   for remediation in management_group subscription resource_group resource; do
     if ! grep -Fq "[root] azurerm_${remediation}_policy_remediation.rem (expand)\" -> \"[root] azuread_group_member.remediation (expand)" "$graph_file"; then
-      echo "sequencing check failed for $mod: missing ${remediation} remediation dependency"
+      echo "sequencing check failed for $mod: missing ${remediation} AAD group dependency"
       FAILED+=("$mod:sequencing-$remediation")
+    fi
+    if ! grep -Fq "[root] azurerm_${remediation}_policy_remediation.rem (expand)\" -> \"[root] azurerm_role_assignment.remediation (expand)" "$graph_file"; then
+      echo "sequencing check failed for $mod: missing ${remediation} RBAC dependency"
+      FAILED+=("$mod:sequencing-$remediation-rbac")
     fi
   done
 done

@@ -193,10 +193,11 @@ locals {
 
   # string-form user metadata is decoded before merging so it is not silently
   # dropped when the governance contract is active (#10 review follow-up)
+  # normalize JSON-string metadata before jsonencode so it is never double-encoded (#51)
   metadata = local.governance_checks == "ok" ? (
     var.governed != null ?
     jsonencode(merge(local.user_metadata_decoded, local.governance_metadata)) :
-    (var.metadata != null ? jsonencode(var.metadata) : null)
+    (var.metadata != null ? jsonencode(local.user_metadata_decoded) : null)
   ) : "{}"
 
   user_metadata_decoded = try(jsondecode(coalesce(null, var.metadata, "{}")), { for k, v in var.metadata : k => v })
