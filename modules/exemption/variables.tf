@@ -65,6 +65,33 @@ variable "expires_on" {
   type        = string
   description = "Optional expiration date (format yyyy-mm-dd) of the policy exemption. Defaults to no expiry"
   default     = null
+
+  validation {
+    condition = (
+      var.expires_on == null ||
+      (
+        can(regex("^\\d{4}-\\d{2}-\\d{2}$", var.expires_on)) &&
+        tonumber(regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on)[1]) >= 1 && tonumber(regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on)[1]) <= 12 &&
+        tonumber(regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on)[2]) >= 1 && tonumber(regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on)[2]) <= (
+          contains(["01", "03", "05", "07", "08", "10", "12"], regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on)[1]) ? 31 :
+          contains(["04", "06", "09", "11"], regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on)[1]) ? 30 :
+          (tonumber(regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on)[0]) % 4 == 0 && (tonumber(regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on)[0]) % 100 != 0 || tonumber(regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on)[0]) % 400 == 0)) ? 29 : 28
+        )
+      )
+    )
+    error_message = "expires_on must be a valid calendar date in format yyyy-mm-dd (e.g. 2026-02-30 is invalid)."
+  }
+
+  validation {
+    condition = (
+      var.governed == null ||
+      var.exemption_category != "Waiver" ||
+      var.expires_on == null ||
+      !can(timecmp("${var.expires_on}T00:00:00Z", plantimestamp())) ||
+      timecmp("${var.expires_on}T00:00:00Z", plantimestamp()) > 0
+    )
+    error_message = "Governed Waiver expires_on must be a future date strictly after the plan date (today fails)."
+  }
 }
 
 variable "metadata" {
@@ -105,8 +132,8 @@ locals {
 
   # governance contract checks (#10): evaluating these locals raises a
   # descriptive sentinel error when the governed contract is violated.
-  # Future-dated expiry cannot be checked deterministically at plan time;
-  # Azure rejects past dates at apply. Format is validated here.
+  # Governed waivers must expire strictly after the plan date (today fails);
+  # comparison uses plantimestamp() for deterministic plan-time validation.
   # strict calendar validation (leap years included); regex alone accepts e.g. 2026-99-40 (#10 review)
   expires_on_date_parts = var.expires_on != null ? regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on) : ["0000", "00", "00"]
   expires_on_days_in_month = (
@@ -131,6 +158,12 @@ locals {
     tonumber(local.governed_created_on_date_parts[2]) >= 1 && tonumber(local.governed_created_on_date_parts[2]) <= local.governed_created_on_days_in_month
   )
 
+  # governed waivers must expire strictly after the plan date (today fails)
+  expires_on_is_future = (
+    var.expires_on != null && local.expires_on_is_valid_calendar_date ?
+    timecmp("${var.expires_on}T00:00:00Z", plantimestamp()) > 0 : false
+  )
+
   governance_checks = (
     var.governed == null ? "ok" :
     var.exemption_category == "Waiver" && var.expires_on == null ?
@@ -141,6 +174,8 @@ locals {
     file("[ERROR] expires_on must be a valid calendar date in format yyyy-mm-dd (e.g. 2026-12-31).") :
     !local.governed_created_on_is_valid ?
     file("[ERROR] governed.governed_created_on must be a valid calendar date in format yyyy-mm-dd (e.g. 2026-12-31).") :
+    var.governed != null && var.exemption_category == "Waiver" && !local.expires_on_is_future ?
+    file("[ERROR] Governed Waiver expires_on must be a future date strictly after the plan date (got '${coalesce(var.expires_on, "")}', plan date '${formatdate("YYYY-MM-DD", plantimestamp())}').") :
     "ok"
   )
 
