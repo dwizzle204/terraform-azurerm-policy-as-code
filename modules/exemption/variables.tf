@@ -31,6 +31,11 @@ variable "description" {
 variable "scope" {
   type        = string
   description = "Scope for the Policy Exemption"
+
+  validation {
+    condition     = can(regex("(?i)^/providers/Microsoft\\.Management/managementGroups/[^/]+$|/subscriptions/[^/]+(/resourceGroups/[^/]+(/providers/.+)?)?$", var.scope))
+    error_message = "scope must be a valid Azure scope: management group, subscription, resource group, or resource."
+  }
 }
 
 variable "policy_assignment_id" {
@@ -99,7 +104,7 @@ variable "metadata" {
   default     = null
 
   validation {
-    condition     = var.metadata == null || (can({ for k, v in var.metadata : k => v }) && !can(tolist(var.metadata))) || can(tostring(var.metadata))
+    condition     = var.metadata == null || (can({ for k, v in var.metadata : k => v }) && !can(tolist(var.metadata))) || try(can({ for k, v in jsondecode(var.metadata) : k => v }) && !can(tolist(jsondecode(var.metadata))), false)
     error_message = "metadata must be an object or a JSON-encoded string."
   }
 }
@@ -120,9 +125,9 @@ variable "governed" {
 
 locals {
   exemption_scope = try({
-    mg       = length(regexall("(\\/managementGroups\\/)", var.scope)) > 0 ? 1 : 0,
+    mg       = length(regexall("(/managementGroups/)", var.scope)) > 0 ? 1 : 0,
     sub      = length(split("/", var.scope)) == 3 ? 1 : 0,
-    rg       = length(regexall("(\\/managementGroups\\/)", var.scope)) < 1 ? length(split("/", var.scope)) == 5 ? 1 : 0 : 0,
+    rg       = length(regexall("(/managementGroups/)", var.scope)) < 1 ? length(split("/", var.scope)) == 5 ? 1 : 0 : 0,
     resource = length(split("/", var.scope)) >= 6 ? 1 : 0,
   })
 

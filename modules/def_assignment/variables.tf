@@ -16,6 +16,11 @@ variable "definition" {
 variable "assignment_scope" {
   type        = string
   description = "The scope at which the policy will be assigned. Must be full resource IDs. Changing this forces a new resource to be created"
+
+  validation {
+    condition     = can(regex("(?i)^/providers/Microsoft\\.Management/managementGroups/[^/]+$|/subscriptions/[^/]+(/resourceGroups/[^/]+(/providers/.+)?)?$", var.assignment_scope))
+    error_message = "assignment_scope must be a valid Azure scope: management group (/providers/Microsoft.Management/managementGroups/<name>), subscription (/subscriptions/<id>), resource group (/subscriptions/<id>/resourceGroups/<name>), or resource (/subscriptions/<id>/resourceGroups/<name>/providers/...)."
+  }
 }
 
 variable "assignment_not_scopes" {
@@ -61,7 +66,7 @@ variable "assignment_metadata" {
   default     = null
 
   validation {
-    condition     = var.assignment_metadata == null || can({ for k, v in var.assignment_metadata : k => v }) || can(tostring(var.assignment_metadata))
+    condition     = var.assignment_metadata == null || can({ for k, v in var.assignment_metadata : k => v }) || try(can({ for k, v in jsondecode(var.assignment_metadata) : k => v }) && !can(tolist(jsondecode(var.assignment_metadata))), false)
     error_message = "assignment_metadata must be an object or a JSON-encoded string."
   }
 }
@@ -318,9 +323,9 @@ locals {
 
   # evaluate policy assignment scope from resource identifier
   assignment_scope = {
-    mg       = length(regexall("(\\/managementGroups\\/)", var.assignment_scope)) > 0 ? 1 : 0,
+    mg       = length(regexall("(/managementGroups/)", var.assignment_scope)) > 0 ? 1 : 0,
     sub      = length(split("/", var.assignment_scope)) == 3 ? 1 : 0,
-    rg       = length(regexall("(\\/managementGroups\\/)", var.assignment_scope)) < 1 ? length(split("/", var.assignment_scope)) == 5 ? 1 : 0 : 0,
+    rg       = length(regexall("(/managementGroups/)", var.assignment_scope)) < 1 ? length(split("/", var.assignment_scope)) == 5 ? 1 : 0 : 0,
     resource = length(split("/", var.assignment_scope)) >= 6 ? 1 : 0,
   }
 
@@ -328,9 +333,9 @@ locals {
   resource_discovery_mode = var.re_evaluate_compliance == true ? "ReEvaluateCompliance" : "ExistingNonCompliant"
   remediation_scope       = coalesce(var.remediation_scope, var.assignment_scope)
   remediate = {
-    mg       = length(regexall("(\\/managementGroups\\/)", local.remediation_scope)) > 0 ? 1 : 0,
+    mg       = length(regexall("(/managementGroups/)", local.remediation_scope)) > 0 ? 1 : 0,
     sub      = length(split("/", local.remediation_scope)) == 3 ? 1 : 0,
-    rg       = length(regexall("(\\/managementGroups\\/)", local.remediation_scope)) < 1 ? length(split("/", local.remediation_scope)) == 5 ? 1 : 0 : 0,
+    rg       = length(regexall("(/managementGroups/)", local.remediation_scope)) < 1 ? length(split("/", local.remediation_scope)) == 5 ? 1 : 0 : 0,
     resource = length(split("/", local.remediation_scope)) >= 6 ? 1 : 0,
   }
 
