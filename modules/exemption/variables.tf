@@ -33,7 +33,7 @@ variable "scope" {
   description = "Scope for the Policy Exemption"
 
   validation {
-    condition     = can(regex("(?i)^/providers/Microsoft\\.Management/managementGroups/[^/]+$|/subscriptions/[^/]+(/resourceGroups/[^/]+(/providers/.+)?|/providers/.+)?$", var.scope))
+    condition     = can(regex("(?i)^(?:/providers/Microsoft\\.Management/managementGroups/[^/]+|/subscriptions/[^/]+(?:/resourceGroups/[^/]+(?:/providers/.+)?|/providers/.+)?)$", var.scope))
     error_message = "scope must be a valid Azure scope: management group, subscription, resource group, or resource."
   }
 }
@@ -125,9 +125,9 @@ variable "governed" {
 
 locals {
   exemption_scope = try({
-    mg       = length(regexall("(/managementGroups/)", var.scope)) > 0 ? 1 : 0,
+    mg       = length(regexall("(?i)(/managementGroups/)", var.scope)) > 0 ? 1 : 0,
     sub      = length(split("/", var.scope)) == 3 ? 1 : 0,
-    rg       = length(regexall("(/managementGroups/)", var.scope)) < 1 ? length(split("/", var.scope)) == 5 ? 1 : 0 : 0,
+    rg       = length(regexall("(?i)(/managementGroups/)", var.scope)) < 1 ? length(split("/", var.scope)) == 5 ? 1 : 0 : 0,
     resource = length(split("/", var.scope)) >= 6 ? 1 : 0,
   })
 

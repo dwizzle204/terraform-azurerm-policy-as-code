@@ -7,9 +7,9 @@ mock_provider "azurerm" {
       description         = "Built-in policy for testing"
       mode                = "Indexed"
       management_group_id = null
-      metadata            = jsonencode({ category = "General", version = "3.1.0" })
-      parameters          = jsonencode({ effect = { type = "String", defaultValue = "DeployIfNotExists", allowedValues = ["AuditIfNotExists", "DeployIfNotExists", "Disabled"], metadata = { displayName = "Effect", description = "Enable or disable the execution of the policy" } } })
-      policy_rule         = jsonencode({ if = { field = "location", notIn = "[parameters('allowedLocations')]" }, then = { effect = "[parameters('effect')]" } })
+      metadata            = "{\"category\":\"General\",\"version\":\"3.1.0\"}"
+      parameters          = "{\"effect\":{\"type\":\"String\",\"defaultValue\":\"DeployIfNotExists\",\"allowedValues\":[\"AuditIfNotExists\",\"DeployIfNotExists\",\"Disabled\"],\"metadata\":{\"displayName\":\"Effect\",\"description\":\"Enable or disable the execution of the policy\"}}}"
+      policy_rule         = "{\"if\":{\"field\":\"location\",\"notIn\":\"[parameters('allowedLocations')]\"},\"then\":{\"effect\":\"[parameters('effect')]\"}}"
       version             = "3.1.0"
     }
     override_during = plan
