@@ -26,7 +26,7 @@ locals {
       mode                = "All"
       management_group_id = null
       metadata            = v.metadata != null ? jsonencode(v.metadata) : null
-      parameters          = null
+      parameters          = v.parameters != null ? jsonencode(v.parameters) : null
       policy_rule         = null
       version             = v.version
     }

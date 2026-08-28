@@ -6,6 +6,7 @@ variable "definitions" {
     policy_name         = optional(string)
     definition_id       = optional(string)
     version             = optional(string)
+    parameters          = optional(any)    # optional parameter schema for built-ins (e.g. effect) to be carried into initiative
     management_group_id = optional(string) # overrides inherited initiative scope for this definition (#13 review)
     metadata            = optional(any)    # free-form metadata passthrough (e.g. control IDs) (#13 review)
   }))
