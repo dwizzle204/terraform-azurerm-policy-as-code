@@ -81,7 +81,7 @@ variable "initiative_metadata" {
   default     = null
 
   validation {
-    condition     = var.initiative_metadata == null || can({ for k, v in var.initiative_metadata : k => v }) || can(tostring(var.initiative_metadata))
+    condition     = var.initiative_metadata == null || can({ for k, v in var.initiative_metadata : k => v }) && !can(tolist(var.initiative_metadata)) || try(can({ for k, v in jsondecode(var.initiative_metadata) : k => v }) && !can(tolist(jsondecode(var.initiative_metadata))), false)
     error_message = "initiative_metadata must be an object or a JSON-encoded string."
   }
 }
