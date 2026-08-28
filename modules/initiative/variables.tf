@@ -237,7 +237,7 @@ locals {
     { null = "Flagged by Initiative: ${var.initiative_name}" }, # default non-compliance message
     { for k, v in local.member_properties :
       var.camel_case_references == false ? v.reference : replace(title(replace(v.reference, "/-|_|\\s/", " ")), "/\\s/", "") => v.non_compliance_message
-      if contains(["All", "Indexed"], v.mode) && var.duplicate_members == false # messages fail on other modes
+      if try(contains(["All", "Indexed"], v.mode), false) && var.duplicate_members == false # messages fail on other modes
     }
   )
 

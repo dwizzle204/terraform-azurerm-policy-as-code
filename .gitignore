@@ -33,3 +33,4 @@ terraform.rc
 
 # agent workflow artifacts (superpowers plans/brainstorms/reviews)
 docs/superpowers/
+.pi/

@@ -15,19 +15,25 @@ locals {
     for k, v in var.definitions : k => v
     if coalesce(v.source, "custom") == "builtin"
   }
+  builtin_definitions_for_data = {
+    for k, v in local.builtin_definitions : k => v
+    if v.version == null
+  }
 
-  # normalized objects for built-ins (Azure-native, no custom DSL)
+  # Hydrate built-ins via AzureRM data source so mode/parameters/policy_rule remain faithful
+  # Pinned built-ins: when version is explicitly set, do not treat the data
+  # source's current definition data as authoritative for that version.
   builtin_definition_objects = {
     for k, v in local.builtin_definitions : k => {
-      id                  = v.definition_id
-      name                = try(basename(v.definition_id), k)
-      display_name        = null
-      description         = null
-      mode                = "All"
-      management_group_id = null
-      metadata            = v.metadata != null ? jsonencode(v.metadata) : null
-      parameters          = v.parameters != null ? jsonencode(v.parameters) : null
-      policy_rule         = null
+      id                  = try(data.azurerm_policy_definition.builtin[k].id, v.definition_id)
+      name                = try(data.azurerm_policy_definition.builtin[k].name, try(basename(v.definition_id), k))
+      display_name        = try(data.azurerm_policy_definition.builtin[k].display_name, null)
+      description         = try(data.azurerm_policy_definition.builtin[k].description, null)
+      mode                = v.mode != null ? v.mode : v.version != null ? null : try(data.azurerm_policy_definition.builtin[k].mode, "All")
+      management_group_id = try(data.azurerm_policy_definition.builtin[k].management_group_id, null)
+      metadata            = v.metadata != null ? jsonencode(v.metadata) : v.version != null ? null : try(data.azurerm_policy_definition.builtin[k].metadata, null)
+      parameters          = v.parameters != null ? jsonencode(v.parameters) : v.version != null ? null : try(data.azurerm_policy_definition.builtin[k].parameters, null)
+      policy_rule         = v.policy_rule != null ? jsonencode(v.policy_rule) : v.version != null ? null : try(data.azurerm_policy_definition.builtin[k].policy_rule, null)
       version             = v.version
     }
   }
@@ -53,6 +59,11 @@ locals {
     { for k, m in module.definitions : k => m.definition },
     local.builtin_definition_objects,
   )
+}
+
+data "azurerm_policy_definition" "builtin" {
+  for_each = local.builtin_definitions_for_data
+  name     = basename(each.value.definition_id)
 }
 
 resource "terraform_data" "validate_definition_scopes" {
