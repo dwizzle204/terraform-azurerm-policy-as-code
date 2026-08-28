@@ -68,27 +68,25 @@ variable "expires_on" {
 
   validation {
     condition = (
-      var.expires_on == null ||
-      (
-        can(regex("^\\d{4}-\\d{2}-\\d{2}$", var.expires_on)) &&
+      var.expires_on == null ? true :
+      can(regex("^\\d{4}-\\d{2}-\\d{2}$", var.expires_on)) ? (
         tonumber(regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on)[1]) >= 1 && tonumber(regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on)[1]) <= 12 &&
         tonumber(regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on)[2]) >= 1 && tonumber(regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on)[2]) <= (
           contains(["01", "03", "05", "07", "08", "10", "12"], regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on)[1]) ? 31 :
           contains(["04", "06", "09", "11"], regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on)[1]) ? 30 :
           (tonumber(regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on)[0]) % 4 == 0 && (tonumber(regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on)[0]) % 100 != 0 || tonumber(regex("^(\\d{4})-(\\d{2})-(\\d{2})$", var.expires_on)[0]) % 400 == 0)) ? 29 : 28
         )
-      )
+      ) : false
     )
     error_message = "expires_on must be a valid calendar date in format yyyy-mm-dd (e.g. 2026-02-30 is invalid)."
   }
 
   validation {
     condition = (
-      var.governed == null ||
-      var.exemption_category != "Waiver" ||
-      var.expires_on == null ||
-      !can(timecmp("${var.expires_on}T00:00:00Z", plantimestamp())) ||
-      timecmp("${var.expires_on}T00:00:00Z", plantimestamp()) > 0
+      var.governed == null ? true :
+      var.exemption_category != "Waiver" ? true :
+      var.expires_on == null ? true :
+      try(timecmp("${var.expires_on}T00:00:00Z", plantimestamp()) > 0, false)
     )
     error_message = "Governed Waiver expires_on must be a future date strictly after the plan date (today fails)."
   }
