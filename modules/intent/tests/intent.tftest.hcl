@@ -1,4 +1,19 @@
 mock_provider "azurerm" {
+  mock_data "azurerm_policy_definition" {
+    defaults = {
+      id                  = "/providers/Microsoft.Authorization/policyDefinitions/e765b5de-1225-4ba3-bd56-1ac6695af988"
+      name                = "e765b5de-1225-4ba3-bd56-1ac6695af988"
+      display_name        = "Allow resource creation only in whitelisted regions"
+      description         = "Built-in policy for testing"
+      mode                = "Indexed"
+      management_group_id = null
+      metadata            = jsonencode({ category = "General", version = "3.1.0" })
+      parameters          = jsonencode({ effect = { type = "String", defaultValue = "DeployIfNotExists", allowedValues = ["AuditIfNotExists", "DeployIfNotExists", "Disabled"], metadata = { displayName = "Effect", description = "Enable or disable the execution of the policy" } } })
+      policy_rule         = jsonencode({ if = { field = "location", notIn = "[parameters('allowedLocations')]" }, then = { effect = "[parameters('effect')]" } })
+      version             = "3.1.0"
+    }
+    override_during = plan
+  }
   mock_data "azurerm_subscription" {
     defaults        = { id = "/subscriptions/00000000-0000-0000-0000-000000000000" }
     override_during = plan
@@ -304,6 +319,37 @@ run "mixed_custom_and_builtin_initiative" {
   assert {
     condition     = length(output.initiative_ids) == 1 && length(output.definition_ids) == 1
     error_message = "Mixed custom + built-in initiative must create the initiative and only the custom definition (built-ins are referenced, not recreated)"
+  }
+
+  assert {
+    condition     = output.initiative_ids["mixed"] != ""
+    error_message = "Mixed initiative must have a valid ID"
+  }
+}
+
+run "builtin_hydrates_mode_and_parameters" {
+  command = plan
+
+  variables {
+    definitions = {
+      builtin_param = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/e765b5de-1225-4ba3-bd56-1ac6695af988"
+      }
+    }
+    initiatives = {
+      with_builtin = {
+        display_name           = "With Builtin"
+        member_definition_keys = ["builtin_param"]
+      }
+    }
+    assignments = {}
+    exemptions  = {}
+  }
+
+  assert {
+    condition     = length(output.initiative_ids) == 1
+    error_message = "Built-in initiative must be created via hydrated data source"
   }
 }
 
