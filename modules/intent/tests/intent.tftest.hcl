@@ -327,6 +327,35 @@ run "mixed_custom_and_builtin_initiative" {
   }
 }
 
+run "pinned_builtin_preserves_explicit_mode_and_policy_rule" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_builtin = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/e765b5de-1225-4ba3-bd56-1ac6695af988"
+        version       = "3.1.0"
+        mode          = "Indexed"
+        policy_rule   = { if = { field = "location", equals = "westeurope" }, then = { effect = "audit" } }
+      }
+    }
+    initiatives = {
+      pinned = {
+        display_name           = "Pinned Builtin"
+        member_definition_keys = ["pinned_builtin"]
+      }
+    }
+    assignments = {}
+    exemptions  = {}
+  }
+
+  assert {
+    condition     = length(output.initiative_ids) == 1
+    error_message = "Pinned built-in initiative must be created with explicit mode/policy_rule preserved"
+  }
+}
+
 run "builtin_hydrates_mode_and_parameters" {
   command = plan
 

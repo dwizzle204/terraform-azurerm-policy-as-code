@@ -25,11 +25,11 @@ locals {
       name                = try(data.azurerm_policy_definition.builtin[k].name, try(basename(v.definition_id), k))
       display_name        = try(data.azurerm_policy_definition.builtin[k].display_name, null)
       description         = try(data.azurerm_policy_definition.builtin[k].description, null)
-      mode                = v.version != null ? "All" : try(data.azurerm_policy_definition.builtin[k].mode, "All")
+      mode                = v.mode != null ? v.mode : v.version != null ? null : try(data.azurerm_policy_definition.builtin[k].mode, "All")
       management_group_id = try(data.azurerm_policy_definition.builtin[k].management_group_id, null)
       metadata            = v.metadata != null ? jsonencode(v.metadata) : v.version != null ? null : try(data.azurerm_policy_definition.builtin[k].metadata, null)
       parameters          = v.parameters != null ? jsonencode(v.parameters) : v.version != null ? null : try(data.azurerm_policy_definition.builtin[k].parameters, null)
-      policy_rule         = v.version != null ? null : try(data.azurerm_policy_definition.builtin[k].policy_rule, null)
+      policy_rule         = v.policy_rule != null ? jsonencode(v.policy_rule) : v.version != null ? null : try(data.azurerm_policy_definition.builtin[k].policy_rule, null)
       version             = v.version
     }
   }
