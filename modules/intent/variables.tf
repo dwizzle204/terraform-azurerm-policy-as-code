@@ -1,19 +1,34 @@
 variable "definitions" {
   type = map(object({
+    source              = optional(string, "custom")
     file_path           = optional(string)
     category            = optional(string)
     policy_name         = optional(string)
+    definition_id       = optional(string)
+    version             = optional(string)
+    parameters          = optional(any)    # optional parameter schema for built-ins (e.g. effect) to be carried into initiative
     management_group_id = optional(string) # overrides inherited initiative scope for this definition (#13 review)
     metadata            = optional(any)    # free-form metadata passthrough (e.g. control IDs) (#13 review)
   }))
   default     = {}
-  description = "Map of logical definition key -> library lookup. Exactly one of file_path or (category + policy_name) per entry."
+  description = "Map of logical definition key -> custom (library/file) or built-in reference. Custom: exactly one of file_path or (category + policy_name). Built-in (source = \"builtin\"): definition_id is required; version is optional where AzureRM supports it."
   validation {
     condition = alltrue([
       for k, v in var.definitions :
-      (v.file_path == null) != (v.category == null || v.policy_name == null)
+      contains(["custom", "builtin"], coalesce(v.source, "custom"))
     ])
-    error_message = "Each definitions entry must set exactly one of file_path or BOTH category and policy_name."
+    error_message = "definitions[].source must be \"custom\" or \"builtin\"."
+  }
+  validation {
+    condition = alltrue([
+      for k, v in var.definitions :
+      coalesce(v.source, "custom") == "builtin" ? (
+        v.definition_id != null && v.file_path == null && v.category == null && v.policy_name == null
+        ) : (
+        v.definition_id == null && (v.file_path == null) != (v.category == null || v.policy_name == null)
+      )
+    ])
+    error_message = "Custom definitions require exactly one of file_path or (category + policy_name) and no definition_id; built-in definitions require definition_id and no file_path/category/policy_name."
   }
 
 }

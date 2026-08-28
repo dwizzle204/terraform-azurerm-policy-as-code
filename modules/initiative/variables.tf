@@ -133,7 +133,11 @@ locals {
       category   = try(jsondecode(d.metadata).category, "")
       # optional attrs yield null (not an error) once member_definitions is
       # fully typed, so null-guard instead of relying on try() fallthrough
-      version = replace(d.version != null ? d.version : try(jsondecode(d.metadata).version, "1.*"), "/^([0-9]+\\.[0-9]+)\\.[0-9]+(-preview)?$/", "$1.*$2")
+      version = d.version != null ? replace(d.version, "/^([0-9]+\\.[0-9]+)\\.[0-9]+(-preview)?$/", "$1.*$2") : (
+        # built-ins with no version pin should remain unversioned, not default to 1.*
+        can(regex("^/providers/Microsoft.Authorization/policyDefinitions/[^/]+$", d.id)) ? null :
+        replace(try(jsondecode(d.metadata).version, "1.*"), "/^([0-9]+\\.[0-9]+)\\.[0-9]+(-preview)?$/", "$1.*$2")
+      )
       non_compliance_message = coalesce(
         try(jsondecode(d.metadata).non_compliance_message, null),
         d.description, d.display_name,

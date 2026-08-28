@@ -6,21 +6,53 @@ locals {
   # intent inputs (see variables.tf), which surface as clean plan errors
   # and are assertable via expect_failures in tests.
 
-  # management-group scope resolution for member definitions (#13 review).
+  # split custom and built-in definitions (built-ins are referenced, not created)
+  custom_definitions = {
+    for k, v in var.definitions : k => v
+    if coalesce(v.source, "custom") == "custom"
+  }
+  builtin_definitions = {
+    for k, v in var.definitions : k => v
+    if coalesce(v.source, "custom") == "builtin"
+  }
+
+  # normalized objects for built-ins (Azure-native, no custom DSL)
+  builtin_definition_objects = {
+    for k, v in local.builtin_definitions : k => {
+      id                  = v.definition_id
+      name                = try(basename(v.definition_id), k)
+      display_name        = null
+      description         = null
+      mode                = "All"
+      management_group_id = null
+      metadata            = v.metadata != null ? jsonencode(v.metadata) : null
+      parameters          = v.parameters != null ? jsonencode(v.parameters) : null
+      policy_rule         = null
+      version             = v.version
+    }
+  }
+
+  # management-group scope resolution for custom member definitions (#13 review).
   # An explicit definition scope is required when references disagree.
   definition_scope_conflicts = [
-    for k, v in var.definitions : k
+    for k, v in local.custom_definitions : k
     if v.management_group_id == null && length(distinct([
       for initiative in var.initiatives : initiative.management_group_id
       if initiative.management_group_id != null && contains(initiative.member_definition_keys, k)
     ])) > 1
   ]
   definition_management_group = {
-    for k, v in var.definitions : k => try(coalesce(
+    for k, v in local.custom_definitions : k => try(coalesce(
       v.management_group_id,
       try([for ini in var.initiatives : ini.management_group_id if ini.management_group_id != null && contains(ini.member_definition_keys, k)][0], null)
     ), null)
   }
+
+  # unified definition map for initiative consumption
+  all_definitions = merge(
+    { for k, m in module.definitions : k => m.definition },
+    local.builtin_definition_objects,
+  )
 }
 
 resource "terraform_data" "validate_definition_scopes" {
@@ -35,7 +67,7 @@ resource "terraform_data" "validate_definition_scopes" {
 module "definitions" {
   source = "../definition"
 
-  for_each = var.definitions
+  for_each = local.custom_definitions
 
   file_path           = each.value.file_path
   policy_category     = each.value.category
@@ -57,7 +89,7 @@ module "initiatives" {
   initiative_scope        = try(each.value.initiative_scope, null)
   initiative_metadata     = each.value.metadata
 
-  member_definitions = [for m in each.value.member_definition_keys : module.definitions[m].definition]
+  member_definitions = [for m in each.value.member_definition_keys : local.all_definitions[m]]
 }
 
 module "assignments" {

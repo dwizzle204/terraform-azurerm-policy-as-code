@@ -279,6 +279,34 @@ run "subscription_only_definitions_resolve_without_error" {
   }
 }
 
+run "mixed_custom_and_builtin_initiative" {
+  command = plan
+
+  variables {
+    definitions = {
+      custom_member = { category = "Monitoring", policy_name = "deploy_vnet_diagnostic_setting" }
+      builtin_member = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/e765b5de-1225-4ba3-bd56-1ac6695af988"
+        version       = "3.1.*"
+      }
+    }
+    initiatives = {
+      mixed = {
+        display_name           = "Mixed Initiative"
+        member_definition_keys = ["custom_member", "builtin_member"]
+      }
+    }
+    assignments = {}
+    exemptions  = {}
+  }
+
+  assert {
+    condition     = length(output.initiative_ids) == 1 && length(output.definition_ids) == 1
+    error_message = "Mixed custom + built-in initiative must create the initiative and only the custom definition (built-ins are referenced, not recreated)"
+  }
+}
+
 run "heterogeneous_assignment_parameters_accepted" {
   command = plan
 
