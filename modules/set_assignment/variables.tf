@@ -74,7 +74,7 @@ variable "assignment_metadata" {
   default     = null
 
   validation {
-    condition     = var.assignment_metadata == null || can({ for k, v in var.assignment_metadata : k => v }) || try(can({ for k, v in jsondecode(var.assignment_metadata) : k => v }) && !can(tolist(jsondecode(var.assignment_metadata))), false)
+    condition     = var.assignment_metadata == null || (can({ for k, v in var.assignment_metadata : k => v }) && !can(tolist(var.assignment_metadata))) || try(can({ for k, v in jsondecode(var.assignment_metadata) : k => v }) && !can(tolist(jsondecode(var.assignment_metadata))), false)
     error_message = "assignment_metadata must be an object or a JSON-encoded string."
   }
 }
