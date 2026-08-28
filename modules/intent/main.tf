@@ -28,7 +28,7 @@ locals {
       metadata            = v.metadata != null ? jsonencode(v.metadata) : try(data.azurerm_policy_definition.builtin[k].metadata, null)
       parameters          = v.parameters != null ? jsonencode(v.parameters) : try(data.azurerm_policy_definition.builtin[k].parameters, null)
       policy_rule         = try(data.azurerm_policy_definition.builtin[k].policy_rule, null)
-      version             = v.version != null ? v.version : try(data.azurerm_policy_definition.builtin[k].version, null)
+      version             = v.version
     }
   }
 
