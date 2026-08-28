@@ -33,7 +33,7 @@ variable "scope" {
   description = "Scope for the Policy Exemption"
 
   validation {
-    condition     = can(regex("(?i)^/providers/Microsoft\\.Management/managementGroups/[^/]+$|/subscriptions/[^/]+(/resourceGroups/[^/]+(/providers/.+)?)?$", var.scope))
+    condition     = can(regex("(?i)^/providers/Microsoft\\.Management/managementGroups/[^/]+$|/subscriptions/[^/]+(/resourceGroups/[^/]+(/providers/.+)?|/providers/.+)?$", var.scope))
     error_message = "scope must be a valid Azure scope: management group, subscription, resource group, or resource."
   }
 }

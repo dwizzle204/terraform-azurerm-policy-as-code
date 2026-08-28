@@ -25,7 +25,7 @@ variable "assignment_scope" {
   description = "The scope at which the policy initiative will be assigned. Must be full resource IDs. Changing this forces a new resource to be created"
 
   validation {
-    condition     = can(regex("(?i)^/providers/Microsoft\\.Management/managementGroups/[^/]+$|/subscriptions/[^/]+(/resourceGroups/[^/]+(/providers/.+)?)?$", var.assignment_scope))
+    condition     = can(regex("(?i)^/providers/Microsoft\\.Management/managementGroups/[^/]+$|/subscriptions/[^/]+(/resourceGroups/[^/]+(/providers/.+)?|/providers/.+)?$", var.assignment_scope))
     error_message = "assignment_scope must be a valid Azure scope: management group (/providers/Microsoft.Management/managementGroups/<name>), subscription (/subscriptions/<id>), resource group (/subscriptions/<id>/resourceGroups/<name>), or resource (/subscriptions/<id>/resourceGroups/<name>/providers/...)."
   }
 }
