@@ -17,17 +17,19 @@ locals {
   }
 
   # Hydrate built-ins via AzureRM data source so mode/parameters/policy_rule remain faithful
+  # Pinned built-ins: when version is explicitly set, do not treat the data
+  # source's current definition data as authoritative for that version.
   builtin_definition_objects = {
     for k, v in local.builtin_definitions : k => {
       id                  = try(data.azurerm_policy_definition.builtin[k].id, v.definition_id)
       name                = try(data.azurerm_policy_definition.builtin[k].name, try(basename(v.definition_id), k))
       display_name        = try(data.azurerm_policy_definition.builtin[k].display_name, null)
       description         = try(data.azurerm_policy_definition.builtin[k].description, null)
-      mode                = try(data.azurerm_policy_definition.builtin[k].mode, "All")
+      mode                = v.version != null ? "All" : try(data.azurerm_policy_definition.builtin[k].mode, "All")
       management_group_id = try(data.azurerm_policy_definition.builtin[k].management_group_id, null)
-      metadata            = v.metadata != null ? jsonencode(v.metadata) : try(data.azurerm_policy_definition.builtin[k].metadata, null)
-      parameters          = v.parameters != null ? jsonencode(v.parameters) : try(data.azurerm_policy_definition.builtin[k].parameters, null)
-      policy_rule         = try(data.azurerm_policy_definition.builtin[k].policy_rule, null)
+      metadata            = v.metadata != null ? jsonencode(v.metadata) : v.version != null ? null : try(data.azurerm_policy_definition.builtin[k].metadata, null)
+      parameters          = v.parameters != null ? jsonencode(v.parameters) : v.version != null ? null : try(data.azurerm_policy_definition.builtin[k].parameters, null)
+      policy_rule         = v.version != null ? null : try(data.azurerm_policy_definition.builtin[k].policy_rule, null)
       version             = v.version
     }
   }
