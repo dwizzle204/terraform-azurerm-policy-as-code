@@ -13,6 +13,15 @@ variable "initiative_scope" {
     condition     = var.initiative_scope == null || try(contains(["management_group", "subscription"], var.initiative_scope), false)
     error_message = "initiative_scope must be 'management_group' or 'subscription' when set."
   }
+
+  validation {
+    condition = (
+      var.initiative_scope == null ? true :
+      var.initiative_scope == "management_group" ? var.management_group_id != null && can(regex("^/providers/Microsoft.Management/managementGroups/[^/]+$", var.management_group_id)) :
+      var.initiative_scope == "subscription" ? var.management_group_id == null : true
+    )
+    error_message = "initiative_scope = 'management_group' requires a valid full MG resource ID in management_group_id; 'subscription' requires management_group_id to be null."
+  }
 }
 
 variable "initiative_name" {
@@ -230,7 +239,8 @@ locals {
 
   # normalize JSON-string input so the resource boundary jsonencode() never
   # double-encodes (#4)
-  metadata = try(jsondecode(coalesce(null, var.initiative_metadata, merge({ category = var.initiative_category }, { version = var.initiative_version }))), coalesce(null, var.initiative_metadata, merge({ category = var.initiative_category }, { version = var.initiative_version })))
+  initiative_metadata_normalized = var.initiative_metadata == null ? null : try(jsondecode(var.initiative_metadata), var.initiative_metadata)
+  metadata                       = try(jsondecode(coalesce(null, local.initiative_metadata_normalized, merge({ category = var.initiative_category }, { version = var.initiative_version }))), coalesce(null, local.initiative_metadata_normalized, merge({ category = var.initiative_category }, { version = var.initiative_version })))
 
   # build non-compliance messages from metadata, or default to description/display_name if not present
   non_compliance_messages = merge(

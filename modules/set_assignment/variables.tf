@@ -169,6 +169,11 @@ variable "remediation_scope" {
   type        = string
   description = "The scope at which the remediation tasks will be created. Must be full resource IDs. Defaults to the policy assignment scope. Changing this forces a new resource to be created"
   default     = null
+
+  validation {
+    condition     = var.remediation_scope == null || can(regex("(?i)^(?:/providers/Microsoft\\.Management/managementGroups/[^/]+|/subscriptions/[^/]+(?:/resourceGroups/[^/]+(?:/providers/.+)?|/providers/.+)?)$", var.remediation_scope))
+    error_message = "remediation_scope must be a valid Azure scope: management group, subscription, resource group, or resource."
+  }
 }
 
 variable "location_filters" {
@@ -267,7 +272,8 @@ locals {
   display_name = try(coalesce(var.assignment_display_name, var.initiative.display_name), "")
   description  = try(coalesce(var.assignment_description, var.initiative.description), "")
   # normalize JSON-string input so the boundary jsonencode() never double-encodes (#4)
-  metadata = jsonencode(try(jsondecode(try(coalesce(var.assignment_metadata, jsondecode(var.initiative.metadata)), {})), try(coalesce(var.assignment_metadata, jsondecode(var.initiative.metadata)), {})))
+  assignment_metadata_normalized = var.assignment_metadata == null ? null : try(jsondecode(var.assignment_metadata), var.assignment_metadata)
+  metadata                       = jsonencode(try(jsondecode(try(coalesce(local.assignment_metadata_normalized, jsondecode(var.initiative.metadata)), {})), try(coalesce(local.assignment_metadata_normalized, jsondecode(var.initiative.metadata)), {})))
 
   # convert assignment parameters to the required assignment structure
   parameter_values = var.assignment_parameters != null ? {

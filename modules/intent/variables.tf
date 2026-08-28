@@ -13,13 +13,63 @@ variable "definitions" {
     metadata            = optional(any)    # free-form metadata passthrough (e.g. control IDs) (#13 review)
   }))
   default     = {}
-  description = "Map of logical definition key -> custom (library/file) or built-in reference. Custom: exactly one of file_path or (category + policy_name). Built-in (source = \"builtin\"): definition_id is required; version is optional where AzureRM supports it."
+  description = "Map of logical definition key -> custom (library/file) or built-in reference. Custom: exactly one of file_path or (category + policy_name). Built-in (source = \"builtin\"): definition_id is required; version is optional where AzureRM supports it. Pinned built-ins (version set) should supply explicit parameters/policy_rule/mode where remediation or mode-specific behavior is needed, as current-version hydration is not used for pinned references."
+
   validation {
     condition = alltrue([
       for k, v in var.definitions :
       contains(["custom", "builtin"], coalesce(v.source, "custom"))
     ])
     error_message = "definitions[].source must be \"custom\" or \"builtin\"."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.definitions : v.parameters == null || (
+        can({ for kk, vv in v.parameters : kk => vv }) && !can(tolist(v.parameters))
+        ) || (
+        can(jsondecode(v.parameters)) && can({ for kk, vv in jsondecode(v.parameters) : kk => vv }) && !can(tolist(jsondecode(v.parameters)))
+      )
+    ])
+    error_message = "definitions[].parameters must be an HCL object or JSON-object string."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.definitions : v.policy_rule == null || (
+        can({ for kk, vv in v.policy_rule : kk => vv }) && !can(tolist(v.policy_rule))
+        ) || (
+        can(jsondecode(v.policy_rule)) && can({ for kk, vv in jsondecode(v.policy_rule) : kk => vv }) && !can(tolist(jsondecode(v.policy_rule)))
+      )
+    ])
+    error_message = "definitions[].policy_rule must be an HCL object or JSON-object string."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.definitions : v.metadata == null || (
+        can({ for kk, vv in v.metadata : kk => vv }) && !can(tolist(v.metadata))
+        ) || (
+        can(jsondecode(v.metadata)) && can({ for kk, vv in jsondecode(v.metadata) : kk => vv }) && !can(tolist(jsondecode(v.metadata)))
+      )
+    ])
+    error_message = "definitions[].metadata must be an HCL object or JSON-object string."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.definitions :
+      !(coalesce(v.source, "custom") == "builtin" && v.version != null && (v.parameters == null || v.policy_rule == null))
+    ])
+    error_message = "Pinned built-in definitions (source = \"builtin\" with version set) must supply explicit parameters and policy_rule."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.definitions :
+      !(coalesce(v.source, "custom") == "builtin" && v.version != null && v.mode == null)
+    ])
+    error_message = "Pinned built-in definitions with version set should supply explicit mode when mode-specific behavior is needed."
   }
   validation {
     condition = alltrue([

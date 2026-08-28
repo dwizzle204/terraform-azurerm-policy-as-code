@@ -299,11 +299,31 @@ run "mixed_custom_and_builtin_initiative" {
 
   variables {
     definitions = {
-      custom_member = { category = "Monitoring", policy_name = "deploy_vnet_diagnostic_setting" }
+      custom_member = {
+        source              = "custom"
+        category            = "Monitoring"
+        policy_name         = "deploy_vnet_diagnostic_setting"
+        file_path           = null
+        definition_id       = null
+        version             = null
+        parameters          = null
+        policy_rule         = null
+        mode                = null
+        management_group_id = null
+        metadata            = null
+      }
       builtin_member = {
-        source        = "builtin"
-        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/e765b5de-1225-4ba3-bd56-1ac6695af988"
-        version       = "3.1.*"
+        source              = "builtin"
+        definition_id       = "/providers/Microsoft.Authorization/policyDefinitions/e765b5de-1225-4ba3-bd56-1ac6695af988"
+        version             = null
+        category            = null
+        policy_name         = null
+        file_path           = null
+        parameters          = null
+        policy_rule         = null
+        mode                = null
+        management_group_id = null
+        metadata            = null
       }
     }
     initiatives = {
@@ -337,6 +357,7 @@ run "pinned_builtin_preserves_explicit_mode_and_policy_rule" {
         definition_id = "/providers/Microsoft.Authorization/policyDefinitions/e765b5de-1225-4ba3-bd56-1ac6695af988"
         version       = "3.1.0"
         mode          = "Indexed"
+        parameters    = {}
         policy_rule   = { if = { field = "location", equals = "westeurope" }, then = { effect = "audit" } }
       }
     }
