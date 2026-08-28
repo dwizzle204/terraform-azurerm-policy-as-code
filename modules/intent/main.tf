@@ -42,10 +42,21 @@ locals {
   # An explicit definition scope is required when references disagree.
   definition_scope_conflicts = [
     for k, v in local.custom_definitions : k
-    if v.management_group_id == null && length(distinct([
-      for initiative in var.initiatives : initiative.management_group_id
-      if initiative.management_group_id != null && contains(initiative.member_definition_keys, k)
-    ])) > 1
+    if v.management_group_id == null && (
+      length(distinct([
+        for initiative in var.initiatives : initiative.management_group_id
+        if initiative.management_group_id != null && contains(initiative.member_definition_keys, k)
+      ])) > 1 ||
+      (
+        length([
+          for initiative in var.initiatives : 1
+          if initiative.management_group_id != null && contains(initiative.member_definition_keys, k)
+          ]) > 0 && length([
+          for initiative in var.initiatives : 1
+          if initiative.management_group_id == null && contains(initiative.member_definition_keys, k)
+        ]) > 0
+      )
+    )
   ]
   definition_management_group = {
     for k, v in local.custom_definitions : k => try(coalesce(
@@ -70,7 +81,7 @@ resource "terraform_data" "validate_definition_scopes" {
   lifecycle {
     precondition {
       condition     = length(local.definition_scope_conflicts) == 0
-      error_message = "Definitions referenced by initiatives in multiple management groups require an explicit management_group_id: ${join(", ", local.definition_scope_conflicts)}."
+      error_message = "Definitions referenced by initiatives in multiple management groups, or across management-group and subscription scopes, require an explicit management_group_id: ${join(", ", local.definition_scope_conflicts)}."
     }
   }
 }
