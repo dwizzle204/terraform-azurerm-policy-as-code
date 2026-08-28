@@ -15,6 +15,10 @@ locals {
     for k, v in var.definitions : k => v
     if coalesce(v.source, "custom") == "builtin"
   }
+  builtin_definitions_for_data = {
+    for k, v in local.builtin_definitions : k => v
+    if v.version == null
+  }
 
   # Hydrate built-ins via AzureRM data source so mode/parameters/policy_rule remain faithful
   # Pinned built-ins: when version is explicitly set, do not treat the data
@@ -58,7 +62,7 @@ locals {
 }
 
 data "azurerm_policy_definition" "builtin" {
-  for_each = local.builtin_definitions
+  for_each = local.builtin_definitions_for_data
   name     = basename(each.value.definition_id)
 }
 
