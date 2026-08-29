@@ -1,5 +1,10 @@
 output "definition_ids" {
-  description = "Map of definition key -> policy definition id"
+  description = "Map of all logical definition keys (custom + built-in) -> policy definition id"
+  value       = { for k, v in local.all_definitions : k => v.id }
+}
+
+output "custom_definition_ids" {
+  description = "Map of custom-created definition keys -> policy definition id (subset of definition_ids)"
   value       = { for k, v in module.definitions : k => v.id }
 }
 
@@ -24,7 +29,12 @@ output "exemption_ids" {
 }
 
 output "definition_details" {
-  description = "Per-definition resolved management-group scope and metadata (useful for asserting catalog/control metadata forwarding)"
+  description = "Per-definition resolved management-group scope and metadata for all logical definitions (custom + built-in)"
+  value       = { for k, v in local.all_definitions : k => { management_group_id = try(v.management_group_id, null), metadata = try(jsondecode(v.metadata), v.metadata) } }
+}
+
+output "custom_definition_details" {
+  description = "Per-custom-definition details (custom-only, for backwards compatibility)"
   value       = { for k, m in module.definitions : k => { management_group_id = m.definition.management_group_id, metadata = m.metadata } }
 }
 

@@ -1,7 +1,12 @@
 variable "management_group_id" {
   type        = string
-  description = "The management group scope at which the initiative will be defined. Defaults to current Subscription if omitted. Changing this forces a new resource to be created. Note: if you are using azurerm_management_group to assign a value to management_group_id, be sure to use name or group_id attribute, but not id. When creating a management group and its initiative in the same configuration, set var.initiative_scope = \"management_group\" explicitly so the resource count is known at plan time."
+  description = "The management group scope at which the initiative will be defined. Provide the full resource ID /providers/Microsoft.Management/managementGroups/<name> (e.g. azurerm_management_group.example.id). Defaults to current Subscription if omitted. When creating a management group and its initiative in the same configuration, set var.initiative_scope = \"management_group\" explicitly so the resource count is known at plan time."
   default     = null
+
+  validation {
+    condition     = var.management_group_id == null || can(regex("(?i)^/providers/Microsoft.Management/managementGroups/[^/]+$", var.management_group_id))
+    error_message = "management_group_id must be a full resource ID like /providers/Microsoft.Management/managementGroups/<name> (e.g. azurerm_management_group.example.id)."
+  }
 }
 
 variable "initiative_scope" {
@@ -17,7 +22,7 @@ variable "initiative_scope" {
   validation {
     condition = (
       var.initiative_scope == null ? true :
-      var.initiative_scope == "management_group" ? var.management_group_id != null && can(regex("^/providers/Microsoft.Management/managementGroups/[^/]+$", var.management_group_id)) :
+      var.initiative_scope == "management_group" ? var.management_group_id != null && can(regex("(?i)^/providers/Microsoft.Management/managementGroups/[^/]+$", var.management_group_id)) :
       var.initiative_scope == "subscription" ? var.management_group_id == null : true
     )
     error_message = "initiative_scope = 'management_group' requires a valid full MG resource ID in management_group_id; 'subscription' requires management_group_id to be null."
@@ -140,12 +145,10 @@ locals {
       )
       parameters = try(jsondecode(d.parameters), {})
       category   = try(jsondecode(d.metadata).category, "")
-      # optional attrs yield null (not an error) once member_definitions is
-      # fully typed, so null-guard instead of relying on try() fallthrough
-      version = d.version != null ? replace(d.version, "/^([0-9]+\\.[0-9]+)\\.[0-9]+(-preview)?$/", "$1.*$2") : (
-        # built-ins with no version pin should remain unversioned, not default to 1.*
+      # preserve caller version exactly (exact patch/wildcard/preview); only normalize fallback from metadata
+      version = d.version != null ? d.version : (
         can(regex("^/providers/Microsoft.Authorization/policyDefinitions/[^/]+$", d.id)) ? null :
-        replace(try(jsondecode(d.metadata).version, "1.*"), "/^([0-9]+\\.[0-9]+)\\.[0-9]+(-preview)?$/", "$1.*$2")
+        try(jsondecode(d.metadata).version, "1.*")
       )
       non_compliance_message = coalesce(
         try(jsondecode(d.metadata).non_compliance_message, null),
@@ -238,9 +241,10 @@ locals {
   })) : lower(v)]), [])
 
   # normalize JSON-string input so the resource boundary jsonencode() never
-  # double-encodes (#4)
+  # double-encodes (#4) — select via JSON-string boundary to avoid object-type coalesce
   initiative_metadata_normalized = var.initiative_metadata == null ? null : try(jsondecode(var.initiative_metadata), var.initiative_metadata)
-  metadata                       = try(jsondecode(coalesce(null, local.initiative_metadata_normalized, merge({ category = var.initiative_category }, { version = var.initiative_version }))), coalesce(null, local.initiative_metadata_normalized, merge({ category = var.initiative_category }, { version = var.initiative_version })))
+  _initiative_metadata_json      = local.initiative_metadata_normalized == null ? jsonencode(merge({ category = var.initiative_category }, { version = var.initiative_version })) : jsonencode(local.initiative_metadata_normalized)
+  metadata                       = jsondecode(local._initiative_metadata_json)
 
   # build non-compliance messages from metadata, or default to description/display_name if not present
   non_compliance_messages = merge(

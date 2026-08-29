@@ -25,15 +25,15 @@ locals {
   # source's current definition data as authoritative for that version.
   builtin_definition_objects = {
     for k, v in local.builtin_definitions : k => {
-      id                  = try(data.azurerm_policy_definition.builtin[k].id, v.definition_id)
-      name                = try(data.azurerm_policy_definition.builtin[k].name, try(basename(v.definition_id), k))
-      display_name        = try(data.azurerm_policy_definition.builtin[k].display_name, null)
-      description         = try(data.azurerm_policy_definition.builtin[k].description, null)
-      mode                = v.mode != null ? v.mode : v.version != null ? null : try(data.azurerm_policy_definition.builtin[k].mode, "All")
-      management_group_id = try(data.azurerm_policy_definition.builtin[k].management_group_id, null)
-      metadata            = v.metadata != null ? jsonencode(try(jsondecode(v.metadata), v.metadata)) : v.version != null ? null : try(data.azurerm_policy_definition.builtin[k].metadata, null)
-      parameters          = v.parameters != null ? jsonencode(try(jsondecode(v.parameters), v.parameters)) : v.version != null ? null : try(data.azurerm_policy_definition.builtin[k].parameters, null)
-      policy_rule         = v.policy_rule != null ? jsonencode(try(jsondecode(v.policy_rule), v.policy_rule)) : v.version != null ? null : try(data.azurerm_policy_definition.builtin[k].policy_rule, null)
+      id                  = try(data.azurerm_policy_definition_built_in.builtin[k].id, v.definition_id)
+      name                = try(data.azurerm_policy_definition_built_in.builtin[k].name, try(basename(v.definition_id), k))
+      display_name        = try(data.azurerm_policy_definition_built_in.builtin[k].display_name, null)
+      description         = try(data.azurerm_policy_definition_built_in.builtin[k].description, null)
+      mode                = v.mode != null ? v.mode : v.version != null ? null : try(data.azurerm_policy_definition_built_in.builtin[k].mode, "All")
+      management_group_id = try(data.azurerm_policy_definition_built_in.builtin[k].management_group_id, null)
+      metadata            = v.metadata != null ? jsonencode(try(jsondecode(v.metadata), v.metadata)) : v.version != null ? null : try(data.azurerm_policy_definition_built_in.builtin[k].metadata, null)
+      parameters          = v.parameters != null ? jsonencode(try(jsondecode(v.parameters), v.parameters)) : v.version != null ? null : try(data.azurerm_policy_definition_built_in.builtin[k].parameters, null)
+      policy_rule         = v.policy_rule != null ? jsonencode(try(jsondecode(v.policy_rule), v.policy_rule)) : v.version != null ? null : try(data.azurerm_policy_definition_built_in.builtin[k].policy_rule, null)
       version             = v.version
     }
   }
@@ -72,7 +72,7 @@ locals {
   )
 }
 
-data "azurerm_policy_definition" "builtin" {
+data "azurerm_policy_definition_built_in" "builtin" {
   for_each = local.builtin_definitions_for_data
   name     = basename(each.value.definition_id)
 }
@@ -82,6 +82,15 @@ resource "terraform_data" "validate_definition_scopes" {
     precondition {
       condition     = length(local.definition_scope_conflicts) == 0
       error_message = "Definitions referenced by initiatives in multiple management groups, or across management-group and subscription scopes, require an explicit management_group_id: ${join(", ", local.definition_scope_conflicts)}."
+    }
+  }
+}
+
+resource "terraform_data" "validate_builtin_types" {
+  lifecycle {
+    precondition {
+      condition     = alltrue([for k, v in local.builtin_definitions : try(data.azurerm_policy_definition_built_in.builtin[k].policy_type, "BuiltIn") == "BuiltIn"])
+      error_message = "All source = \"builtin\" definitions must resolve to policy_type == BuiltIn. Custom policy IDs cannot be supplied as built-ins."
     }
   }
 }

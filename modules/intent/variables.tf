@@ -59,17 +59,9 @@ variable "definitions" {
   validation {
     condition = alltrue([
       for k, v in var.definitions :
-      !(coalesce(v.source, "custom") == "builtin" && v.version != null && (v.parameters == null || v.policy_rule == null))
+      coalesce(v.source, "custom") != "builtin" || can(regex("(?i)^/providers/Microsoft.Authorization/policyDefinitions/[^/]+$", v.definition_id))
     ])
-    error_message = "Pinned built-in definitions (source = \"builtin\" with version set) must supply explicit parameters and policy_rule."
-  }
-
-  validation {
-    condition = alltrue([
-      for k, v in var.definitions :
-      !(coalesce(v.source, "custom") == "builtin" && v.version != null && v.mode == null)
-    ])
-    error_message = "Pinned built-in definitions with version set should supply explicit mode when mode-specific behavior is needed."
+    error_message = "Built-in definition_id must be a full resource ID like /providers/Microsoft.Authorization/policyDefinitions/<name> (e.g. /providers/Microsoft.Authorization/policyDefinitions/613633c2-...)."
   }
   validation {
     condition = alltrue([
