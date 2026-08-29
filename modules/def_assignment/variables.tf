@@ -266,7 +266,8 @@ locals {
   description  = try(coalesce(var.assignment_description, var.definition.description), "")
   # normalize JSON-string input so the boundary jsonencode() never double-encodes (#4)
   assignment_metadata_normalized = var.assignment_metadata == null ? null : try(jsondecode(var.assignment_metadata), var.assignment_metadata)
-  metadata                       = jsonencode(try(jsondecode(try(coalesce(local.assignment_metadata_normalized, jsondecode(var.definition.metadata)), {})), try(coalesce(local.assignment_metadata_normalized, jsondecode(var.definition.metadata)), {})))
+  _assignment_metadata_json      = local.assignment_metadata_normalized != null ? jsonencode(local.assignment_metadata_normalized) : jsonencode(try(jsondecode(var.definition.metadata), {}))
+  metadata                       = local._assignment_metadata_json
 
   # convert assignment parameters to the required assignment structure
   parameter_values = var.assignment_parameters != null ? {

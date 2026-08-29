@@ -1,4 +1,20 @@
 mock_provider "azurerm" {
+  mock_data "azurerm_policy_definition_built_in" {
+    defaults = {
+      id                  = "/providers/Microsoft.Authorization/policyDefinitions/e765b5de-1225-4ba3-bd56-1ac6695af988"
+      name                = "e765b5de-1225-4ba3-bd56-1ac6695af988"
+      display_name        = "Allow resource creation only in whitelisted regions"
+      description         = "Built-in policy for testing"
+      mode                = "Indexed"
+      management_group_id = null
+      metadata            = "{\"category\":\"General\",\"version\":\"3.1.0\"}"
+      parameters          = "{\"effect\":{\"type\":\"String\",\"defaultValue\":\"DeployIfNotExists\",\"allowedValues\":[\"AuditIfNotExists\",\"DeployIfNotExists\",\"Disabled\"],\"metadata\":{\"displayName\":\"Effect\",\"description\":\"Enable or disable the execution of the policy\"}}}"
+      policy_rule         = "{\"if\":{\"field\":\"location\",\"notIn\":\"[parameters('allowedLocations')]\"},\"then\":{\"effect\":\"[parameters('effect')]\"}}"
+      version             = "3.1.0"
+      policy_type         = "BuiltIn"
+    }
+    override_during = plan
+  }
   mock_data "azurerm_policy_definition" {
     defaults = {
       id                  = "/providers/Microsoft.Authorization/policyDefinitions/e765b5de-1225-4ba3-bd56-1ac6695af988"
@@ -337,8 +353,8 @@ run "mixed_custom_and_builtin_initiative" {
   }
 
   assert {
-    condition     = length(output.initiative_ids) == 1 && length(output.definition_ids) == 1
-    error_message = "Mixed custom + built-in initiative must create the initiative and only the custom definition (built-ins are referenced, not recreated)"
+    condition     = length(output.initiative_ids) == 1 && length(output.definition_ids) == 2 && length(output.custom_definition_ids) == 1
+    error_message = "Mixed custom + built-in initiative must create the initiative and expose both custom and built-in IDs"
   }
 
   assert {
@@ -355,7 +371,7 @@ run "pinned_builtin_preserves_explicit_mode_and_policy_rule" {
       pinned_builtin = {
         source        = "builtin"
         definition_id = "/providers/Microsoft.Authorization/policyDefinitions/e765b5de-1225-4ba3-bd56-1ac6695af988"
-        version       = "3.1.0"
+        version       = "3.1"
         mode          = "Indexed"
         parameters    = {}
         policy_rule   = { if = { field = "location", equals = "westeurope" }, then = { effect = "audit" } }

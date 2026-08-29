@@ -150,7 +150,7 @@ locals {
   parameters   = local.parameters_canonical
   policy_rule  = local.policy_rule_canonical
 
-  # normalize JSON-string inputs BEFORE selection so coalesce never mixes string/object types (#51)
+  # normalize JSON-string inputs BEFORE selection (#51): verify decoded value is an object where required
   policy_metadata_normalized   = var.policy_metadata == null ? null : try(jsondecode(var.policy_metadata), var.policy_metadata)
   policy_parameters_normalized = var.policy_parameters == null ? null : try(jsondecode(var.policy_parameters), var.policy_parameters)
   policy_rule_normalized       = var.policy_rule == null ? null : try(jsondecode(var.policy_rule), var.policy_rule)
@@ -161,9 +161,10 @@ locals {
   parameters_canonical  = try(jsondecode(local.parameters_raw), local.parameters_raw)
   policy_rule_canonical = try(jsondecode(local.policy_rule_raw), local.policy_rule_raw)
 
-  metadata_raw    = coalesce(null, local.policy_metadata_normalized, try((local.policy_object).properties.metadata, merge({ category = local.category }, { version = local.version })))
-  parameters_raw  = coalesce(null, local.policy_parameters_normalized, try((local.policy_object).properties.parameters, {}))
-  policy_rule_raw = coalesce(local.policy_rule_normalized, try((local.policy_object).properties.policyRule, null))
+  # select via JSON-string boundary to avoid object-type unification across arbitrary shapes
+  metadata_raw    = jsondecode(local.policy_metadata_normalized != null ? jsonencode(local.policy_metadata_normalized) : jsonencode(try((local.policy_object).properties.metadata, merge({ category = local.category }, { version = local.version }))))
+  parameters_raw  = jsondecode(local.policy_parameters_normalized != null ? jsonencode(local.policy_parameters_normalized) : jsonencode(try((local.policy_object).properties.parameters, {})))
+  policy_rule_raw = local.policy_rule_normalized != null ? local.policy_rule_normalized : try((local.policy_object).properties.policyRule, null)
 
   # manually generate the definition Id to prevent "Invalid for_each argument" on set_assignment plan/apply
   # deterministic name suffix: identical inputs (logical name + merged

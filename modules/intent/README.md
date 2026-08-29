@@ -10,10 +10,12 @@ deterministic. No new resource types — state lives in the underlying modules.
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| definitions | map(key -> {file_path **or** category+policy_name}) | `map(object)` | `{}` | no |
+| definitions | map(key -> {`file_path` **or** `category+policy_name` **or** `source="builtin"` with `definition_id`}) | `map(object)` | `{}` | no |
 | initiatives | map(key -> {display_name, member_definition_keys, ...}) | `map(object)` | `{}` | no |
 | assignments | map(key -> {initiative_key, scope, ...}) | `map(object)` | `{}` | no |
 | exemptions | map(key -> {assignment_key, scope, name, ..., governed?}) | `map(object)` | `{}` | no |
+
+**Built-in definitions** (`source = "builtin"`): set `definition_id = "/providers/Microsoft.Authorization/policyDefinitions/<name>"`, optional `version` (exact `3.1.0` stays `3.1.0`, `3.1.*` stays wildcard, `null` = unversioned/latest). Pinned built-ins should supply `parameters`/`policy_rule`/`mode` only when remediation/mode-specific behavior is needed. Unpinned built-ins hydrate `mode`/`parameters`/`policy_rule`/`roleDefinitionIds` automatically via `data.azurerm_policy_definition_built_in`.
 
 Dangling references (unknown member/initiative/assignment keys) fail at plan
 time with a diagnostic naming every offender.
@@ -33,7 +35,7 @@ their legacy `collision_resistant_naming = false` default for compatibility.
 | assignment_principal_ids | map key -> managed identity principal id |
 | exemption_ids | map key -> exemption id |
 
-## Example
+## Example (custom + built-in)
 
 ```hcl
 module "policy_intent" {
@@ -41,6 +43,18 @@ module "policy_intent" {
 
   definitions = {
     deny_risky_ports = { category = "Network", policy_name = "network_security_group_deny_port_scanner" }
+    allowed_locations_builtin = {
+      source        = "builtin"
+      definition_id = "/providers/Microsoft.Authorization/policyDefinitions/e56962a6-4747-49cd-b67b-bf8b01975c4c"
+      # version = "3.1.0" # exact pin stays exact; omit for latest
+    }
+  }
+
+  initiatives = {
+    platform_baseline = {
+      display_name           = "Platform Baseline"
+      member_definition_keys = ["deny_risky_ports", "allowed_locations_builtin"]
+    }
   }
 
   initiatives = {
