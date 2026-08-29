@@ -129,16 +129,16 @@ locals {
   # referenced initiative contains pinned built-in members lacking caller-
   # supplied policy_rule/roles (and no assignment-level role_definition_ids
   # or explicit remediation_reference_ids), fail fast naming the keys.
-  pinned_remediation_conflicts = [
-    for ak, a in var.assignments :
-    "${ak} -> ${a.initiative_key}" if a.remediate && length(coalesce(a.role_definition_ids, [])) == 0 && length(coalesce(a.remediation_reference_ids, [])) == 0 && contains([
-      for mk in var.initiatives[a.initiative_key].member_definition_keys :
-      mk if var.definitions[mk].source == "builtin" && var.definitions[mk].version != null
-      ], true) == false && length([
-      for mk in var.initiatives[a.initiative_key].member_definition_keys :
-      mk if var.definitions[mk].source == "builtin" && var.definitions[mk].version != null
-    ]) > 0 && try(var.definitions[[for mk in var.initiatives[a.initiative_key].member_definition_keys : mk if var.definitions[mk].source == "builtin" && var.definitions[mk].version != null][0]].policy_rule, null) == null
-  ]
+  pinned_remediation_conflicts = distinct(flatten([
+    for ak, a in var.assignments : [
+      for pair in setproduct([ak], [a.initiative_key]) : [
+        for mk in var.initiatives[a.initiative_key].member_definition_keys : (
+          "${ak} -> ${a.initiative_key} -> ${mk}"
+        ) if a.remediate && length(coalesce(a.role_definition_ids, [])) == 0 &&
+        var.definitions[mk].source == "builtin" && var.definitions[mk].version != null && var.definitions[mk].policy_rule == null
+      ]
+    ]
+  ]))
 }
 
 resource "terraform_data" "validate_pinned_remediation" {

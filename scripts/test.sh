@@ -384,6 +384,50 @@ else
 fi
 popd >/dev/null
 
+echo "== initiative metadata version canonicalization (issue 55) =="
+TMPV=$(mktemp -d)
+mkdir -p "$TMPV/cfg"
+cat >"$TMPV/cfg/main.tf" <<EOF2
+module "canonical" {
+  source                  = "$PWD/modules/initiative"
+  initiative_name         = "canonical"
+  initiative_display_name = "Canonical"
+  management_group_id     = "/providers/Microsoft.Management/managementGroups/test"
+  member_definitions = [{
+    id           = "/providers/Microsoft.Authorization/policyDefinitions/member_v3"
+    name         = "member_v3"
+    display_name = "Member V3"
+    mode         = "All"
+    metadata     = jsonencode({ category = "Monitoring", version = "1.0.0" })
+    parameters   = jsonencode({})
+    policy_rule  = jsonencode({ if = {}, then = {} })
+  }]
+}
+EOF2
+cat >"$TMPV/cfg/providers.tf" <<'EOF2'
+terraform {
+  required_providers { azurerm = { source = "hashicorp/azurerm" } }
+}
+
+provider "azurerm" {
+  features {}
+}
+EOF2
+pushd "$TMPV/cfg" >/dev/null
+ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 "$TF" init -backend=false -no-color >/dev/null
+set +e
+ARM_CLIENT_CERTIFICATE_PATH=/nonexistent/cert.pfx ARM_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000 "$TF" plan -no-color >/dev/null 2>"$TMPV/err.txt"
+RCV=$?
+set -e
+if [ $RCV -ne 0 ]; then
+  echo "canonicalization check failed: plan should succeed with 1.0.* fallback"
+  cat "$TMPV/err.txt"
+  FAILED+=("initiative:canonicalization")
+else
+  echo "OK: metadata-derived 1.0.0 canonicalized (plan succeeded)"
+fi
+popd >/dev/null
+
 echo "== sequencing check: remediation depends on AAD group and RBAC (#38) =="
 GRAPH_TMP=$(mktemp -d)
 trap 'rm -rf "$TMP" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$GRAPH_TMP"' EXIT

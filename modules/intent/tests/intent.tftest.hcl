@@ -494,16 +494,17 @@ run "pinned_remediation_with_roles_succeeds" {
     }
     assignments = {
       requested_remediation = {
-        initiative_key      = "baseline"
-        scope               = "/subscriptions/00000000-0000-0000-0000-000000000000"
-        remediate           = true
-        role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+        initiative_key            = "baseline"
+        scope                     = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate                 = true
+        role_definition_ids       = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+        remediation_reference_ids = ["b7ddfbdc-e688-46bc-a468-2def594365a3"]
       }
     }
   }
 
   assert {
-    condition     = length(output.assignment_remediation_references["requested_remediation"]) > 0 || output.assignment_remediation_references["requested_remediation"] != null
+    condition     = length(output.assignment_remediation_references["requested_remediation"]) >= 1
     error_message = "Explicit role_definition_ids must satisfy the pinned built-in remediation contract"
   }
 }

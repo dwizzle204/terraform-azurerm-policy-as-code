@@ -152,14 +152,14 @@ locals {
       )
       parameters = try(jsondecode(d.parameters), {})
       category   = try(jsondecode(d.metadata).category, "")
-      # preserve caller version exactly (exact patch/wildcard/preview); only normalize fallback from metadata.
-      # metadata-derived versions are canonicalized to the AzureRM reference grammar
-      # (three-part exact versions like 1.0.0 are invalid for policy_definition_reference.version)
+      # preserve caller version exactly; only fallback from metadata is canonicalized.
+      # After replace, validate grammar again and fall back to "1.*" if still invalid (e.g. "bogus")
       version = d.version != null ? d.version : (
         can(regex("^/providers/Microsoft.Authorization/policyDefinitions/[^/]+$", d.id)) ? null :
         try(
           can(regex("^([1-9]\\d*)\\.(\\d+|\\*)(\\.\\*(-preview)?)?$", jsondecode(d.metadata).version)) ? jsondecode(d.metadata).version :
-          replace(jsondecode(d.metadata).version, "/^([1-9]\\d*\\.[0-9]+)\\.[0-9]+(-preview)?$/", "$1.*$2"),
+          can(regex("^([1-9]\\d*)\\.(\\d+|\\*)(\\.\\*(-preview)?)?$", replace(jsondecode(d.metadata).version, "/^([1-9]\\d*\\.[0-9]+)\\.[0-9]+(-preview)?$/", "$1.*$2"))) ? replace(jsondecode(d.metadata).version, "/^([1-9]\\d*\\.[0-9]+)\\.[0-9]+(-preview)?$/", "$1.*$2") :
+          "1.*",
           "1.*"
         )
       )
