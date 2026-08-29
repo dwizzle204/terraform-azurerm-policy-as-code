@@ -10,8 +10,10 @@ is validated against. All six modules (`definition`, `initiative`, `exemption`, 
 | azuread   | >= 2.0, < 4.0 | 3.x | Used by `def_assignment` / `set_assignment` group membership |
 
 CI runs the offline module suite against two Terraform lines (`~1.11`, `~1.15`)
-and resolves the latest in-range provider versions, so both the floors and the
-open upper bounds are exercised.
+with current providers, plus a dedicated **provider-compatibility** job that
+initializes/validates every module at the minimum floors (`azurerm 4.35.0`,
+`azuread 2.47.0`, `random 3.6.0`). Together both the floors and the open
+upper bounds are exercised.
 
 ## Upgrade guidance
 

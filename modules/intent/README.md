@@ -15,7 +15,7 @@ deterministic. No new resource types — state lives in the underlying modules.
 | assignments | map(key -> {initiative_key, scope, ...}) | `map(object)` | `{}` | no |
 | exemptions | map(key -> {assignment_key, scope, name, ..., governed?}) | `map(object)` | `{}` | no |
 
-**Built-in definitions** (`source = "builtin"`): set `definition_id = "/providers/Microsoft.Authorization/policyDefinitions/<name>"`, optional `version` (exact `3.1.0` stays `3.1.0`, `3.1.*` stays wildcard, `null` = unversioned/latest). Pinned built-ins should supply `parameters`/`policy_rule`/`mode` only when remediation/mode-specific behavior is needed. Unpinned built-ins hydrate `mode`/`parameters`/`policy_rule`/`roleDefinitionIds` automatically via `data.azurerm_policy_definition_built_in`.
+**Built-in definitions** (`source = "builtin"`): set `definition_id = "/providers/Microsoft.Authorization/policyDefinitions/<name>"`, optional `version` (exact `3.1` stays `3.1`, `3.1.*` stays wildcard, `null` = unversioned/latest). Pinned built-ins should supply `parameters`/`policy_rule`/`mode` only when remediation/mode-specific behavior is needed. Unpinned built-ins hydrate `mode`/`parameters`/`policy_rule`/`roleDefinitionIds` automatically via `data.azurerm_policy_definition_built_in`.
 
 Dangling references (unknown member/initiative/assignment keys) fail at plan
 time with a diagnostic naming every offender.
@@ -46,7 +46,7 @@ module "policy_intent" {
     allowed_locations_builtin = {
       source        = "builtin"
       definition_id = "/providers/Microsoft.Authorization/policyDefinitions/e56962a6-4747-49cd-b67b-bf8b01975c4c"
-      # version = "3.1.0" # exact pin stays exact; omit for latest
+      # version = "3.1" # provider-valid pin (major.minor); 3.1.* for minor wildcard; 1.0.*-preview for preview
     }
   }
 
@@ -54,13 +54,6 @@ module "policy_intent" {
     platform_baseline = {
       display_name           = "Platform Baseline"
       member_definition_keys = ["deny_risky_ports", "allowed_locations_builtin"]
-    }
-  }
-
-  initiatives = {
-    platform_baseline = {
-      display_name           = "Platform Baseline"
-      member_definition_keys = ["deny_risky_ports"]
     }
   }
 

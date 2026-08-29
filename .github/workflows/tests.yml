@@ -161,3 +161,27 @@ jobs:
 
       - name: Terraform Test (mocked)
         run: terraform test -no-color
+
+  provider-compatibility:
+    name: Provider Compatibility (minimum floors azurerm 4.35 / azuread 2.47)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
+      - uses: hashicorp/setup-terraform@633666f66e0061ca3b725c73b2ec20cd13a8fdd1 # v2
+        with:
+          terraform_version: ~1.15.0
+          terraform_wrapper: false
+      - name: Validate minimum provider floors
+        run: |
+          for mod in modules/definition modules/initiative modules/exemption modules/def_assignment modules/set_assignment modules/intent; do
+            echo "=== $mod at azurerm=4.35.0 azuread=2.47.0 ==="
+            cp "$mod/versions.tf" "$mod/versions.tf.bak"
+            # pin to minimum versions for this check
+            sed -i 's/version = ">= 4.35, < 6.0"/version = "= 4.35.0"/' "$mod/versions.tf" 2>/dev/null || true
+            sed -i 's/version = ">= 2.0, < 4.0"/version = "= 2.47.0"/' "$mod/versions.tf" 2>/dev/null || true
+            sed -i 's/version = ">= 3.1, < 4.0"/version = "= 3.6.0"/' "$mod/versions.tf" 2>/dev/null || true
+            (cd "$mod" && terraform init -backend=false -upgrade -no-color && terraform validate -no-color)
+            mv "$mod/versions.tf.bak" "$mod/versions.tf"
+            (cd "$mod" && terraform init -backend=false -upgrade -no-color >/dev/null)
+          done
+          echo "minimum floors validated"

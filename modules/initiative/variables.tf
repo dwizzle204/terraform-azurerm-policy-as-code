@@ -86,6 +86,13 @@ variable "member_definitions" {
     policy_rule         = optional(string)
     version             = optional(string)
   }))
+
+  validation {
+    condition = alltrue([
+      for d in var.member_definitions : d.version == null || can(regex("^([1-9]\\d*)\\.(\\d+|\\*)(\\.\\*(-preview)?)?$", d.version))
+    ])
+    error_message = "member_definitions[].version must match '{major}.{minor}[.*][-preview]' (e.g. '3.1', '3.1.*', '3.*.*', '1.0.*-preview'); '3.1.0' is not provider-valid."
+  }
 }
 
 variable "initiative_metadata" {
