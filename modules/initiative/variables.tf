@@ -152,10 +152,16 @@ locals {
       )
       parameters = try(jsondecode(d.parameters), {})
       category   = try(jsondecode(d.metadata).category, "")
-      # preserve caller version exactly (exact patch/wildcard/preview); only normalize fallback from metadata
+      # preserve caller version exactly; only fallback from metadata is canonicalized.
+      # After replace, validate grammar again and fall back to "1.*" if still invalid (e.g. "bogus")
       version = d.version != null ? d.version : (
         can(regex("^/providers/Microsoft.Authorization/policyDefinitions/[^/]+$", d.id)) ? null :
-        try(jsondecode(d.metadata).version, "1.*")
+        try(
+          can(regex("^([1-9]\\d*)\\.(\\d+|\\*)(\\.\\*(-preview)?)?$", jsondecode(d.metadata).version)) ? jsondecode(d.metadata).version :
+          can(regex("^([1-9]\\d*)\\.(\\d+|\\*)(\\.\\*(-preview)?)?$", replace(jsondecode(d.metadata).version, "/^([1-9]\\d*\\.[0-9]+)\\.[0-9]+(-preview)?$/", "$1.*$2"))) ? replace(jsondecode(d.metadata).version, "/^([1-9]\\d*\\.[0-9]+)\\.[0-9]+(-preview)?$/", "$1.*$2") :
+          "1.*",
+          "1.*"
+        )
       )
       non_compliance_message = coalesce(
         try(jsondecode(d.metadata).non_compliance_message, null),

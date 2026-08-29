@@ -7,7 +7,7 @@ is validated against. All six modules (`definition`, `initiative`, `exemption`, 
 |-----------|---------|--------|-------|
 | Terraform | >= 1.11 | 1.15.9 | Floor exists for the offline `terraform test` / `mock_provider` suites run in CI (`override_during` requires >= 1.11) |
 | azurerm   | >= 4.35, < 6.0 | 5.2.0 | `< 6.0` caps the next unvalidated major |
-| azuread   | >= 2.0, < 4.0 | 3.x | Used by `def_assignment` / `set_assignment` group membership |
+| azuread   | >= 2.47, < 4.0 | 3.x | Used by `def_assignment` / `set_assignment` group membership (minimum 2.47 is the oldest line exercised by CI) |
 
 CI runs the offline module suite against two Terraform lines (`~1.11`, `~1.15`)
 with current providers, plus a dedicated **provider-compatibility** job that

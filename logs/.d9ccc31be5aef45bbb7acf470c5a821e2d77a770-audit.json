@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "/home/dm/workspace/terraform-azurerm-policy-as-code/logs/.d9ccc31be5aef45bbb7acf470c5a821e2d77a770-audit.json",
+    "files": [
+        {
+            "date": 1788025079238,
+            "name": "/home/dm/workspace/terraform-azurerm-policy-as-code/logs/error-2026-08-29.log",
+            "hash": "1508744f71289fe7dae163de91cb88b62f63af8ba2277c6ba59c7b1751a6a088"
+        }
+    ],
+    "hashType": "sha256"
+}

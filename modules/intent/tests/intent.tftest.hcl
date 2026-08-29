@@ -440,3 +440,107 @@ run "heterogeneous_assignment_parameters_accepted" {
     error_message = "Intent assignments must use deterministic collision-resistant names by default"
   }
 }
+
+run "pinned_remediation_without_metadata_fails_fast" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_dine = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_dine"]
+      }
+    }
+    assignments = {
+      requested_remediation = {
+        initiative_key = "baseline"
+        scope          = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate      = true
+      }
+    }
+  }
+
+  # expect the terraform_data precondition failure
+  expect_failures = [
+    terraform_data.validate_pinned_remediation,
+  ]
+}
+
+run "pinned_remediation_with_roles_succeeds" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_dine = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_dine"]
+      }
+    }
+    assignments = {
+      requested_remediation = {
+        initiative_key            = "baseline"
+        scope                     = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate                 = true
+        effect                    = "DeployIfNotExists"
+        role_definition_ids       = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+        remediation_reference_ids = ["b7ddfbdc-e688-46bc-a468-2def594365a3"]
+      }
+    }
+  }
+
+  assert {
+    condition     = length(output.assignment_remediation_references["requested_remediation"]) >= 1
+    error_message = "Explicit role_definition_ids plus an effect source must satisfy the pinned built-in remediation contract"
+  }
+}
+
+run "pinned_remediation_roles_without_effect_still_fails" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_dine = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_dine"]
+      }
+    }
+    assignments = {
+      requested_remediation = {
+        initiative_key      = "baseline"
+        scope               = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate           = true
+        role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+        # no effect supplied: member effect is unresolvable, so remediation
+        # would silently no-op — the guard must still fail
+      }
+    }
+  }
+
+  expect_failures = [
+    terraform_data.validate_pinned_remediation,
+  ]
+}

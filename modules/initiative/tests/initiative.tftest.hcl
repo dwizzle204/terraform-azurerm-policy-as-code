@@ -262,3 +262,74 @@ run "effect_conflicts_are_ignored_when_merge_effects_disabled" {
 }
 
 
+
+
+
+run "metadata_derived_three_part_version_canonicalized_on_resource" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyDefinitions/member_v3"
+        name         = "member_v3"
+        display_name = "Member V3"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring", version = "1.0.0" })
+        parameters   = jsonencode({})
+        policy_rule  = jsonencode({ if = {}, then = {} })
+      }
+    ]
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].version == "1.0.*"
+    error_message = "Three-part metadata version 1.0.0 must be canonicalized to 1.0.* on the resource (AzureRM grammar)"
+  }
+}
+
+run "metadata_derived_wildcard_version_unchanged_on_resource" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyDefinitions/member_w"
+        name         = "member_w"
+        display_name = "Member W"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring", version = "3.*.*-preview" })
+        parameters   = jsonencode({})
+        policy_rule  = jsonencode({ if = {}, then = {} })
+      }
+    ]
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].version == "3.*.*-preview"
+    error_message = "Provider-valid wildcard versions must survive unchanged on the resource"
+  }
+}
+
+run "metadata_derived_invalid_version_falls_back_to_1_star" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyDefinitions/member_bogus"
+        name         = "member_bogus"
+        display_name = "Member Bogus"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring", version = "bogus" })
+        parameters   = jsonencode({})
+        policy_rule  = jsonencode({ if = {}, then = {} })
+      }
+    ]
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].version == "1.*"
+    error_message = "Invalid metadata-derived versions must fall back to 1.* so an unsupported value never reaches the AzureRM reference (issue 55)"
+  }
+}
