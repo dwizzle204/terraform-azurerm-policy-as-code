@@ -124,17 +124,19 @@ module "initiatives" {
 }
 
 locals {
-  # issue #55: pinned built-ins without policy_rule/roles cannot silently
+  # issue #55: pinned built-ins without policy_rule cannot silently
   # degrade remediation to a no-op. When remediation is requested and the
   # referenced initiative contains pinned built-in members lacking caller-
-  # supplied policy_rule/roles (and no assignment-level role_definition_ids
-  # or explicit remediation_reference_ids), fail fast naming the keys.
+  # supplied policy_rule (and no assignment-level effect source or explicit
+  # remediation_reference_ids), fail fast naming the keys. role_definition_ids
+  # alone are insufficient because they only provision identity; without an
+  # effect the member is excluded from remediation selection and would no-op.
   pinned_remediation_conflicts = distinct(flatten([
     for ak, a in var.assignments : [
       for pair in setproduct([ak], [a.initiative_key]) : [
         for mk in var.initiatives[a.initiative_key].member_definition_keys : (
           "${ak} -> ${a.initiative_key} -> ${mk}"
-        ) if a.remediate && length(coalesce(a.role_definition_ids, [])) == 0 &&
+        ) if a.remediate && a.effect == null && length(coalesce(a.remediation_reference_ids, [])) == 0 &&
         var.definitions[mk].source == "builtin" && var.definitions[mk].version != null && var.definitions[mk].policy_rule == null
       ]
     ]
@@ -145,7 +147,7 @@ resource "terraform_data" "validate_pinned_remediation" {
   lifecycle {
     precondition {
       condition     = length(local.pinned_remediation_conflicts) == 0
-      error_message = "Remediation requested for assignments containing pinned built-ins without policy_rule or role metadata: ${join(", ", local.pinned_remediation_conflicts)}. Supply role_definition_ids on the assignment, explicit remediation_reference_ids, or the pinned definition's policy_rule."
+      error_message = "Remediation requested for assignments containing pinned built-ins without policy_rule/roles or an effect source: ${join(", ", local.pinned_remediation_conflicts)}. Supply role_definition_ids plus assignment_effect, explicit remediation_reference_ids plus assignment_effect, or the pinned definition's policy_rule."
     }
   }
 }

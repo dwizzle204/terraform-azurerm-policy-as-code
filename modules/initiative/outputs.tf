@@ -47,6 +47,7 @@ output "initiative" {
         parameter_values     = i.parameter_values
         policy_definition_id = i.policy_definition_id
         reference_id         = i.reference_id
+        version              = i.version
       }
     ]
   }
