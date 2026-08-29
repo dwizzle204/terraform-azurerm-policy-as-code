@@ -175,15 +175,7 @@ jobs:
         run: |
           for mod in modules/definition modules/initiative modules/exemption modules/def_assignment modules/set_assignment modules/intent; do
             echo "=== $mod at azurerm=4.35.0 azuread=2.47.0 ==="
-            cat > "$mod/versions_min_test.tf" <<'EOV'
-          terraform {
-            required_providers {
-              azurerm = { source = "hashicorp/azurerm", version = "= 4.35.0" }
-              azuread = { source = "hashicorp/azuread", version = "= 2.47.0" }
-              random  = { source = "hashicorp/random", version = "= 3.6.0" }
-            }
-          }
-EOV
+            printf 'terraform {\n  required_providers {\n    azurerm = { source = "hashicorp/azurerm", version = "= 4.35.0" }\n    azuread = { source = "hashicorp/azuread", version = "= 2.47.0" }\n    random  = { source = "hashicorp/random", version = "= 3.6.0" }\n  }\n}\n' > "$mod/versions_min_test.tf"
             (cd "$mod" && terraform init -backend=false -upgrade -no-color && terraform validate -no-color)
             rm -f "$mod/versions_min_test.tf"
             (cd "$mod" && terraform init -backend=false -upgrade -no-color >/dev/null)
