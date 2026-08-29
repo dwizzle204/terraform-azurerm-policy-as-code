@@ -15,7 +15,7 @@ deterministic. No new resource types — state lives in the underlying modules.
 | assignments | map(key -> {initiative_key, scope, ...}) | `map(object)` | `{}` | no |
 | exemptions | map(key -> {assignment_key, scope, name, ..., governed?}) | `map(object)` | `{}` | no |
 
-**Built-in definitions** (`source = "builtin"`): set `definition_id = "/providers/Microsoft.Authorization/policyDefinitions/<name>"`, optional `version` (exact `3.1.0` stays `3.1.0`, `3.1.*` stays wildcard, `null` = unversioned/latest). Pinned built-ins should supply `parameters`/`policy_rule`/`mode` only when remediation/mode-specific behavior is needed. Unpinned built-ins hydrate `mode`/`parameters`/`policy_rule`/`roleDefinitionIds` automatically via `data.azurerm_policy_definition_built_in`.
+**Built-in definitions** (`source = "builtin"`): set `definition_id = "/providers/Microsoft.Authorization/policyDefinitions/<name>"`, optional `version` (exact `3.1` stays `3.1`, `3.1.*` stays wildcard, `null` = unversioned/latest). Pinned built-ins should supply `parameters`/`policy_rule`/`mode` only when remediation/mode-specific behavior is needed. Unpinned built-ins hydrate `mode`/`parameters`/`policy_rule`/`roleDefinitionIds` automatically via `data.azurerm_policy_definition_built_in`.
 
 Dangling references (unknown member/initiative/assignment keys) fail at plan
 time with a diagnostic naming every offender.
