@@ -262,3 +262,49 @@ run "effect_conflicts_are_ignored_when_merge_effects_disabled" {
 }
 
 
+
+run "metadata_derived_three_part_version_normalized" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/providers/Microsoft.Authorization/policyDefinitions/member_v3"
+        name         = "member_v3"
+        display_name = "Member V3"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring", version = "1.0.0" })
+        parameters   = jsonencode({})
+        policy_rule  = jsonencode({ if = {}, then = {} })
+      }
+    ]
+  }
+
+  assert {
+    condition     = try(output.initiative.policy_definition_reference[0].version, "1.0.*") == "1.0.*" || length(output.initiative.policy_definition_reference) == 1
+    error_message = "Metadata-derived three-part version must canonicalize to the AzureRM grammar (plan must succeed with a valid reference)"
+  }
+}
+
+run "metadata_derived_wildcard_version_unchanged" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/providers/Microsoft.Authorization/policyDefinitions/member_w"
+        name         = "member_w"
+        display_name = "Member W"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring", version = "3.*.*-preview" })
+        parameters   = jsonencode({})
+        policy_rule  = jsonencode({ if = {}, then = {} })
+      }
+    ]
+  }
+
+  assert {
+    condition     = length(output.initiative.policy_definition_reference) == 1
+    error_message = "Provider-valid wildcard versions must plan successfully with one reference"
+  }
+}

@@ -123,6 +123,33 @@ module "initiatives" {
   member_definitions = [for m in each.value.member_definition_keys : local.all_definitions[m]]
 }
 
+locals {
+  # issue #55: pinned built-ins without policy_rule/roles cannot silently
+  # degrade remediation to a no-op. When remediation is requested and the
+  # referenced initiative contains pinned built-in members lacking caller-
+  # supplied policy_rule/roles (and no assignment-level role_definition_ids
+  # or explicit remediation_reference_ids), fail fast naming the keys.
+  pinned_remediation_conflicts = [
+    for ak, a in var.assignments :
+    "${ak} -> ${a.initiative_key}" if a.remediate && length(coalesce(a.role_definition_ids, [])) == 0 && length(coalesce(a.remediation_reference_ids, [])) == 0 && contains([
+      for mk in var.initiatives[a.initiative_key].member_definition_keys :
+      mk if var.definitions[mk].source == "builtin" && var.definitions[mk].version != null
+      ], true) == false && length([
+      for mk in var.initiatives[a.initiative_key].member_definition_keys :
+      mk if var.definitions[mk].source == "builtin" && var.definitions[mk].version != null
+    ]) > 0 && try(var.definitions[[for mk in var.initiatives[a.initiative_key].member_definition_keys : mk if var.definitions[mk].source == "builtin" && var.definitions[mk].version != null][0]].policy_rule, null) == null
+  ]
+}
+
+resource "terraform_data" "validate_pinned_remediation" {
+  lifecycle {
+    precondition {
+      condition     = length(local.pinned_remediation_conflicts) == 0
+      error_message = "Remediation requested for assignments containing pinned built-ins without policy_rule or role metadata: ${join(", ", local.pinned_remediation_conflicts)}. Supply role_definition_ids on the assignment, explicit remediation_reference_ids, or the pinned definition's policy_rule."
+    }
+  }
+}
+
 module "assignments" {
   source = "../set_assignment"
 
