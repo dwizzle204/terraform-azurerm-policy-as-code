@@ -179,6 +179,7 @@ jobs:
             # pin to minimum versions for this check
             sed -i 's/version = ">= 4.35, < 6.0"/version = "= 4.35.0"/' "$mod/versions.tf" 2>/dev/null || true
             sed -i 's/version = ">= 2.47, < 4.0"/version = "= 2.47.0"/' "$mod/versions.tf" 2>/dev/null || true
+            sed -i 's/version = ">= 2.0, < 4.0"/version = "= 2.47.0"/' "$mod/versions.tf" 2>/dev/null || true
             sed -i 's/version = ">= 3.1, < 4.0"/version = "= 3.6.0"/' "$mod/versions.tf" 2>/dev/null || true
             # assert the pin actually landed (fail loudly if the sed missed)
             grep -q 'azurerm' "$mod/versions.tf" && grep -q '= 4.35.0' "$mod/versions.tf" || { echo "azurerm floor pin did not land in $mod"; exit 1; }
@@ -195,6 +196,7 @@ jobs:
             cp "$mod/versions.tf" "$mod/versions.tf.bak"
             sed -i 's/version = ">= 4.35, < 6.0"/version = "= 4.35.0"/' "$mod/versions.tf" 2>/dev/null || true
             sed -i 's/version = ">= 2.47, < 4.0"/version = "= 2.47.0"/' "$mod/versions.tf" 2>/dev/null || true
+            sed -i 's/version = ">= 2.0, < 4.0"/version = "= 2.47.0"/' "$mod/versions.tf" 2>/dev/null || true
             grep -q '= 4.35.0' "$mod/versions.tf" || { echo "floor pin did not land in $mod"; exit 1; }
             (cd "$mod" && terraform init -backend=false -upgrade -no-color >/dev/null && terraform test -no-color)
             mv "$mod/versions.tf.bak" "$mod/versions.tf"
