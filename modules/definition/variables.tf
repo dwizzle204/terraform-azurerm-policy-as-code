@@ -162,9 +162,11 @@ locals {
   policy_rule_canonical = try(jsondecode(local.policy_rule_raw), local.policy_rule_raw)
 
   # select via JSON-string boundary to avoid object-type unification across arbitrary shapes
-  metadata_raw    = jsondecode(local.policy_metadata_normalized != null ? jsonencode(local.policy_metadata_normalized) : jsonencode(try((local.policy_object).properties.metadata, merge({ category = local.category }, { version = local.version }))))
-  parameters_raw  = jsondecode(local.policy_parameters_normalized != null ? jsonencode(local.policy_parameters_normalized) : jsonencode(try((local.policy_object).properties.parameters, {})))
-  policy_rule_raw = local.policy_rule_normalized != null ? local.policy_rule_normalized : try((local.policy_object).properties.policyRule, null)
+  metadata_raw   = jsondecode(local.policy_metadata_normalized != null ? jsonencode(local.policy_metadata_normalized) : jsonencode(try((local.policy_object).properties.metadata, merge({ category = local.category }, { version = local.version }))))
+  parameters_raw = jsondecode(local.policy_parameters_normalized != null ? jsonencode(local.policy_parameters_normalized) : jsonencode(try((local.policy_object).properties.parameters, {})))
+  # use JSON-string boundary for policy_rule to avoid structural-type unification between runtime override and file fallback
+  policy_rule_raw_json = local.policy_rule_normalized != null ? jsonencode(local.policy_rule_normalized) : try(jsonencode((local.policy_object).properties.policyRule), "null")
+  policy_rule_raw      = jsondecode(local.policy_rule_raw_json)
 
   # manually generate the definition Id to prevent "Invalid for_each argument" on set_assignment plan/apply
   # deterministic name suffix: identical inputs (logical name + merged
