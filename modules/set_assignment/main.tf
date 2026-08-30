@@ -2,6 +2,33 @@ resource "terraform_data" "set_assign_replace" {
   input = try(var.initiative.replace_trigger, md5(jsonencode(var.initiative.parameters)))
 }
 
+# issue #62: assignment_effect and assignment_parameters are values for
+# parameters DECLARED by the assigned initiative. Fail fast when the payload
+# would inject undeclared parameter keys, or when assignment_effect is supplied
+# without an initiative "effect" parameter wired to at least one member
+# reference (e.g. pinned built-ins whose schema is intentionally not hydrated).
+resource "terraform_data" "validate_parameter_contract" {
+  lifecycle {
+    precondition {
+      condition     = var.assignment_effect == null || local.initiative_effect_parameter_declared
+      error_message = "assignment_effect ('${(var.assignment_effect != null ? var.assignment_effect : "null")}') cannot be applied: the assigned initiative '${try(var.initiative.name, "")}' does not declare an 'effect' parameter. Declare an effect parameter in the initiative schema, omit assignment_effect, or use explicit remediation_reference_ids for unresolved pinned policies (issue #62)."
+    }
+
+    precondition {
+      # wiring only matters when a remediation task is actually attempted:
+      # without an identity (or with remediation skipped) no member is ever
+      # selected, so an unwired effect parameter cannot silently no-op (#62)
+      condition     = var.assignment_effect == null || var.skip_remediation || length(local.identity_type) == 0 || local.initiative_member_wired_to_effect
+      error_message = "assignment_effect ('${(var.assignment_effect != null ? var.assignment_effect : "null")}') cannot be applied: no member reference of initiative '${try(var.initiative.name, "")}' is wired to the initiative-level 'effect' parameter ([parameters('effect')]). Under merge_effects = false members use per-reference effect parameters; supply those via assignment_parameters or omit assignment_effect (issue #62)."
+    }
+
+    precondition {
+      condition     = length(local.unknown_assignment_parameter_keys) == 0
+      error_message = "assignment_parameters contain keys the assigned initiative '${try(var.initiative.name, "")}' does not declare: [${join(", ", local.unknown_assignment_parameter_keys)}]. Declared parameters: [${join(", ", keys(local.initiative_parameters_decoded))}] (issue #62)."
+    }
+  }
+}
+
 resource "azurerm_management_group_policy_assignment" "set" {
   count                = local.assignment_scope.mg
   name                 = local.assignment_name

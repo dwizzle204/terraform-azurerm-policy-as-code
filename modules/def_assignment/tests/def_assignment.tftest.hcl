@@ -128,6 +128,13 @@ run "assignment_effect_is_merged_into_parameters" {
   variables {
     assignment_effect     = "Audit"
     assignment_parameters = { retentionDays = 90 }
+    # issue #62: assignment parameters are values for DECLARED parameters
+    definition = merge(var.definition, {
+      parameters = jsonencode({
+        effect        = { type = "String", defaultValue = "AuditIfNotExists" }
+        retentionDays = { type = "Int", defaultValue = 30 }
+      })
+    })
   }
 
   assert {
@@ -220,6 +227,12 @@ run "assignment_effect_override_drives_eligibility" {
     assignment_effect   = "Modify"
     remediate_effects   = ["Modify"]
     role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    # issue #62: assignment_effect requires a declared effect parameter
+    definition = merge(var.definition, {
+      parameters = jsonencode({
+        effect = { type = "String", defaultValue = "AuditIfNotExists" }
+      })
+    })
   }
 
   assert {
@@ -341,4 +354,64 @@ run "role_assignment_permission_path_creates_remediation" {
     error_message = "Role-assignment permission provisioning must retain remediation creation"
   }
 
+}
+
+# issue #62: assignment_effect without a declared definition "effect" parameter
+# would inject an undeclared assignment parameter that Azure rejects at apply.
+run "assignment_effect_without_effect_param_fails" {
+  command = plan
+
+  variables {
+    assignment_effect = "DeployIfNotExists"
+    # default fixture declares parameters = jsonencode({}) — no effect parameter
+  }
+
+  expect_failures = [
+    terraform_data.validate_parameter_contract,
+  ]
+}
+
+# issue #62: unknown assignment_parameters keys must fail fast naming the key.
+run "assignment_parameters_unknown_key_fails" {
+  command = plan
+
+  variables {
+    assignment_parameters = { retentionDaysTypo = 90 }
+    definition = merge(var.definition, {
+      parameters = jsonencode({
+        retentionDays = { type = "Int", defaultValue = 30 }
+      })
+    })
+  }
+
+  expect_failures = [
+    terraform_data.validate_parameter_contract,
+  ]
+}
+
+# issue #62: with a declared effect parameter, assignment_effect flows into the
+# normalized assignment payload and drives remediation eligibility.
+run "assignment_effect_with_declared_effect_param_payload" {
+  command = plan
+
+  variables {
+    assignment_effect   = "Modify"
+    remediate_effects   = ["Modify"]
+    role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    definition = merge(var.definition, {
+      parameters = jsonencode({
+        effect = { type = "String", defaultValue = "AuditIfNotExists" }
+      })
+    })
+  }
+
+  assert {
+    condition     = jsondecode(output.parameters)["effect"].value == "Modify"
+    error_message = "assignment_effect must be wired into the normalized payload when the definition declares an 'effect' parameter (#62)"
+  }
+
+  assert {
+    condition     = output.remediation_id != ""
+    error_message = "A declared effect parameter plus assignment_effect must drive remediation eligibility (#62)"
+  }
 }

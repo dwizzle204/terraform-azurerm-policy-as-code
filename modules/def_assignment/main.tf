@@ -2,6 +2,25 @@ resource "terraform_data" "def_assign_replace_def" {
   input = md5(jsonencode(var.definition))
 }
 
+# issue #62: assignment_effect and assignment_parameters are values for
+# parameters DECLARED by the assigned definition. Fail fast when the payload
+# would inject undeclared parameter keys (e.g. "effect") that Azure would
+# reject at apply and that make local remediation selection disagree with the
+# real policy contract.
+resource "terraform_data" "validate_parameter_contract" {
+  lifecycle {
+    precondition {
+      condition     = var.assignment_effect == null || local.effect_parameter_declared
+      error_message = "assignment_effect ('${(var.assignment_effect != null ? var.assignment_effect : "null")}') cannot be applied: the assigned definition '${try(var.definition.name, "")}' does not declare an 'effect' parameter. Declare an effect parameter in the definition, omit assignment_effect, or use explicit remediation_reference_ids for unresolved pinned policies (issue #62)."
+    }
+
+    precondition {
+      condition     = length(local.unknown_assignment_parameter_keys) == 0
+      error_message = "assignment_parameters contain keys the assigned definition '${try(var.definition.name, "")}' does not declare: [${join(", ", local.unknown_assignment_parameter_keys)}]. Declared parameters: [${join(", ", keys(local.definition_parameters_decoded))}] (issue #62)."
+    }
+  }
+}
+
 resource "terraform_data" "def_assign_replace_param" {
   input = md5(jsonencode(local.parameters))
 }

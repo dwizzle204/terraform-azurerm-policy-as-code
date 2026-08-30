@@ -423,6 +423,27 @@ run "heterogeneous_assignment_parameters_accepted" {
   command = plan
 
   variables {
+    # issue #62: heterogeneous VALUES are accepted for DECLARED parameters;
+    # undeclared keys are rejected by the parameter-contract validation
+    definitions = merge(var.definitions, {
+      pinned_hetero = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+        parameters = jsonencode({
+          effect      = { "type" : "String", "defaultValue" : "DeployIfNotExists", "allowedValues" : ["AuditIfNotExists", "DeployIfNotExists", "Disabled"], "metadata" : { "displayName" : "Effect", "description" : "Enable or disable the execution of the policy" } },
+          stringParam = { type = "String", defaultValue = "" }
+          listParam   = { type = "Array", defaultValue = [] }
+        })
+      }
+    })
+    initiatives = {
+      platform_baseline = {
+        display_name           = "Platform Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/platform"
+        member_definition_keys = ["member_a", "member_b", "pinned_hetero"]
+      }
+    }
     assignments = {
       mixed_params = {
         initiative_key = "platform_baseline"
@@ -483,6 +504,18 @@ run "pinned_remediation_with_roles_succeeds" {
         source        = "builtin"
         definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
         version       = "3.1"
+        # issue #62: assignment_effect is only valid when the pinned schema
+        # declares an "effect" parameter the initiative can wire to
+        parameters = jsonencode({
+          effect = {
+            type          = "String"
+            defaultValue  = "DeployIfNotExists"
+            allowedValues = ["DeployIfNotExists", "Audit", "Disabled"]
+            metadata = {
+              displayName = "Effect"
+            }
+          }
+        })
       }
     }
     initiatives = {
@@ -563,6 +596,18 @@ run "pinned_remediation_effect_no_roles_fails" {
         source        = "builtin"
         definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
         version       = "3.1"
+        # declared effect schema: assignment_effect is a valid initiative
+        # parameter here, isolating this test's failure to the intended guard
+        parameters = jsonencode({
+          effect = {
+            type          = "String"
+            defaultValue  = "Audit"
+            allowedValues = ["DeployIfNotExists", "Audit", "Disabled"]
+            metadata = {
+              displayName = "Effect"
+            }
+          }
+        })
       }
     }
     initiatives = {
@@ -780,6 +825,18 @@ run "pinned_remediation_audit_effect_with_roles_fails" {
         source        = "builtin"
         definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
         version       = "3.1"
+        # declared effect schema: assignment_effect is a valid initiative
+        # parameter here, isolating this test's failure to the intended guard
+        parameters = jsonencode({
+          effect = {
+            type          = "String"
+            defaultValue  = "Audit"
+            allowedValues = ["DeployIfNotExists", "Audit", "Disabled"]
+            metadata = {
+              displayName = "Effect"
+            }
+          }
+        })
       }
     }
     initiatives = {
@@ -899,6 +956,18 @@ run "pinned_remediation_explicit_ref_audit_effect_fails" {
         source        = "builtin"
         definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
         version       = "3.1"
+        # declared effect schema isolates this test's failure to the
+        # non-remediable-effect guard (not the #62 parameter contract)
+        parameters = jsonencode({
+          effect = {
+            type          = "String"
+            defaultValue  = "Audit"
+            allowedValues = ["DeployIfNotExists", "Audit", "Disabled"]
+            metadata = {
+              displayName = "Effect"
+            }
+          }
+        })
       }
     }
     initiatives = {
@@ -1056,6 +1125,18 @@ run "pinned_remediation_audit_effect_with_explicit_reference_fails" {
         source        = "builtin"
         definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
         version       = "3.1"
+        # declared effect schema isolates this test's failure to the
+        # non-remediable-effect guard (not the #62 parameter contract)
+        parameters = jsonencode({
+          effect = {
+            type          = "String"
+            defaultValue  = "Audit"
+            allowedValues = ["DeployIfNotExists", "Audit", "Disabled"]
+            metadata = {
+              displayName = "Effect"
+            }
+          }
+        })
       }
     }
     initiatives = {
@@ -1122,9 +1203,8 @@ run "pinned_remediation_parameterized_effect_without_schema_fails" {
         scope               = "/subscriptions/00000000-0000-0000-0000-000000000000"
         remediate           = true
         role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
-        parameters = {
-          effect = "DeployIfNotExists"
-        }
+        # no assignment effect/parameters: without a schema the effect stays
+        # unresolved downstream and the guard must fail
       }
     }
   }
@@ -1302,4 +1382,102 @@ run "pinned_remediation_param_name_mismatch_fails" {
   expect_failures = [
     terraform_data.validate_pinned_remediation,
   ]
+}
+
+# issue #62: a schema-less pinned built-in + assignment_effect fails inside
+# set_assignment's validate_parameter_contract; child-module resources are not
+# checkable in terraform test expect_failures, so that path is asserted in
+# modules/set_assignment/tests (assignment_effect_without_effect_param_fails).
+run "pinned_remediation_reference_no_effect_param_payload_clean" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_dine = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+        # no parameters schema
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_dine"]
+      }
+    }
+    assignments = {
+      requested_remediation = {
+        initiative_key            = "baseline"
+        scope                     = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate                 = true
+        role_definition_ids       = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+        remediation_reference_ids = ["b7ddfbdc-e688-46bc-a468-2def594365a3"]
+        # no assignment_effect: unresolved selection must not invent one
+      }
+    }
+  }
+
+  assert {
+    condition     = length(output.assignment_remediation_references["requested_remediation"]) >= 1
+    error_message = "Explicit remediation_reference_ids plus roles must select the pinned member for unresolved-effect remediation (#62)"
+  }
+
+  assert {
+    condition     = try(jsondecode(output.assignment_parameters["requested_remediation"]).effect, null) == null
+    error_message = "Unresolved pinned selection must not inject an undeclared 'effect' assignment parameter into the normalized payload (#62)"
+  }
+}
+
+# issue #62: with an explicit effect parameter schema, assignment_effect is a
+# valid assignment parameter and must appear in the normalized payload.
+run "pinned_remediation_effect_with_schema_payload_wired" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_dine = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+        parameters = jsonencode({
+          effect = {
+            type          = "String"
+            defaultValue  = "Audit"
+            allowedValues = ["DeployIfNotExists", "Audit", "Disabled"]
+            metadata = {
+              displayName = "Effect"
+            }
+          }
+        })
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_dine"]
+      }
+    }
+    assignments = {
+      requested_remediation = {
+        initiative_key      = "baseline"
+        scope               = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate           = true
+        effect              = "DeployIfNotExists"
+        role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+      }
+    }
+  }
+
+  assert {
+    condition     = try(jsondecode(output.assignment_parameters["requested_remediation"]).effect.value, "") == "DeployIfNotExists"
+    error_message = "assignment_effect must be wired into the normalized assignment payload when the initiative declares an 'effect' parameter (#62)"
+  }
+
+  assert {
+    condition     = length(output.assignment_remediation_references["requested_remediation"]) >= 1
+    error_message = "A declared effect parameter plus assignment_effect and roles must produce remediation references (#62)"
+  }
 }
