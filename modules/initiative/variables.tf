@@ -152,17 +152,17 @@ locals {
       )
       parameters = try(jsondecode(d.parameters), {})
       category   = try(jsondecode(d.metadata).category, "")
-      # preserve caller version exactly; only fallback from metadata is canonicalized.
-      # After replace, validate grammar again and fall back to "1.*" if still invalid (e.g. "bogus")
-      version = d.version != null ? d.version : (
-        can(regex("^/providers/Microsoft.Authorization/policyDefinitions/[^/]+$", d.id)) ? null :
-        try(
-          can(regex("^([1-9]\\d*)\\.(\\d+|\\*)(\\.\\*(-preview)?)?$", jsondecode(d.metadata).version)) ? jsondecode(d.metadata).version :
-          can(regex("^([1-9]\\d*)\\.(\\d+|\\*)(\\.\\*(-preview)?)?$", replace(jsondecode(d.metadata).version, "/^([1-9]\\d*\\.[0-9]+)\\.[0-9]+(-preview)?$/", "$1.*$2"))) ? replace(jsondecode(d.metadata).version, "/^([1-9]\\d*\\.[0-9]+)\\.[0-9]+(-preview)?$/", "$1.*$2") :
-          "1.*",
-          "1.*"
-        )
-      )
+      # issue #59: catalog/content version (organizational metadata) is kept
+      # separate from the Azure definitionVersion selector. A custom
+      # definition's metadata.version is catalog information only and must
+      # never be inferred as an Azure policy_definition_reference.version.
+      catalog_version = try(jsondecode(d.metadata).version, null)
+      # Azure definitionVersion selector: ONLY an explicit caller-supplied
+      # d.version (built-in selector contract) is used. Custom definitions
+      # emit no selector unless a caller explicitly supplies one; validation
+      # of the AzureRM grammar happens on the member_definitions variable.
+      azure_definition_version = d.version
+      version                  = d.version
       non_compliance_message = coalesce(
         try(jsondecode(d.metadata).non_compliance_message, null),
         d.description, d.display_name,
@@ -179,7 +179,8 @@ locals {
     k => {
       policy_definition_id = v.id
       reference_id         = var.camel_case_references == false ? v.reference : replace(title(replace(v.reference, "/-|_|\\s/", " ")), "/\\s/", "")
-      version              = v.version
+      version              = v.azure_definition_version
+      catalog_version      = v.catalog_version
       parameter_values = length(v.parameters) > 0 ? jsonencode({
         for i in keys(v.parameters) :
         i => {

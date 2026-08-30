@@ -265,7 +265,9 @@ run "effect_conflicts_are_ignored_when_merge_effects_disabled" {
 
 
 
-run "metadata_derived_three_part_version_canonicalized_on_resource" {
+# issue #59: a custom definition's metadata.version is catalog information
+# only and must never be inferred as an Azure definitionVersion selector.
+run "custom_metadata_version_not_inferred_as_azure_selector" {
   command = plan
 
   variables {
@@ -283,45 +285,78 @@ run "metadata_derived_three_part_version_canonicalized_on_resource" {
   }
 
   assert {
-    condition     = output.initiative.policy_definition_reference[0].version == "1.0.*"
-    error_message = "Three-part metadata version 1.0.0 must be canonicalized to 1.0.* on the resource (AzureRM grammar)"
+    condition     = output.initiative.policy_definition_reference[0].version == null
+    error_message = "Custom definition metadata.version must NOT be emitted as an Azure definitionVersion selector"
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].catalog_version == "1.0.0"
+    error_message = "Custom metadata.version must remain available as catalog version information"
   }
 }
 
-run "metadata_derived_wildcard_version_unchanged_on_resource" {
+# issue #59: built-in explicit version selectors are preserved unchanged.
+run "builtin_explicit_version_selector_preserved" {
   command = plan
 
   variables {
     member_definitions = [
       {
-        id           = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyDefinitions/member_w"
+        id           = "/providers/Microsoft.Authorization/policyDefinitions/member_w"
         name         = "member_w"
         display_name = "Member W"
         mode         = "All"
-        metadata     = jsonencode({ category = "Monitoring", version = "3.*.*-preview" })
+        metadata     = jsonencode({ category = "Monitoring" })
         parameters   = jsonencode({})
         policy_rule  = jsonencode({ if = {}, then = {} })
+        version      = "3.*.*-preview"
       }
     ]
   }
 
   assert {
     condition     = output.initiative.policy_definition_reference[0].version == "3.*.*-preview"
-    error_message = "Provider-valid wildcard versions must survive unchanged on the resource"
+    error_message = "Explicit built-in version selectors must be preserved unchanged on the reference"
   }
 }
 
-run "metadata_derived_invalid_version_falls_back_to_1_star" {
+# issue #59: built-in explicit three-part selectors pass through as supplied.
+run "builtin_explicit_three_part_version_selector_preserved" {
   command = plan
 
   variables {
     member_definitions = [
       {
-        id           = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyDefinitions/member_bogus"
-        name         = "member_bogus"
-        display_name = "Member Bogus"
+        id           = "/providers/Microsoft.Authorization/policyDefinitions/member_v3"
+        name         = "member_v3"
+        display_name = "Member V3"
         mode         = "All"
-        metadata     = jsonencode({ category = "Monitoring", version = "bogus" })
+        metadata     = jsonencode({ category = "Monitoring" })
+        parameters   = jsonencode({})
+        policy_rule  = jsonencode({ if = {}, then = {} })
+        version      = "3.1"
+      }
+    ]
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].version == "3.1"
+    error_message = "Explicit built-in '3.1' selectors must be preserved unchanged on the reference"
+  }
+}
+
+# issue #59: an unversioned built-in emits no definitionVersion selector.
+run "unversioned_builtin_version_null" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/providers/Microsoft.Authorization/policyDefinitions/member_none"
+        name         = "member_none"
+        display_name = "Member None"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring" })
         parameters   = jsonencode({})
         policy_rule  = jsonencode({ if = {}, then = {} })
       }
@@ -329,7 +364,7 @@ run "metadata_derived_invalid_version_falls_back_to_1_star" {
   }
 
   assert {
-    condition     = output.initiative.policy_definition_reference[0].version == "1.*"
-    error_message = "Invalid metadata-derived versions must fall back to 1.* so an unsupported value never reaches the AzureRM reference (issue 55)"
+    condition     = output.initiative.policy_definition_reference[0].version == null
+    error_message = "Unversioned built-ins must emit no definitionVersion selector"
   }
 }
