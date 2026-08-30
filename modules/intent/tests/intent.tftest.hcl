@@ -718,3 +718,122 @@ run "pinned_not_remediated_stays_lightweight" {
     error_message = "Non-remediated pinned members must not produce remediation references or trigger the pinned-remediation guard (#58)"
   }
 }
+
+# issue #58 (oracle P1): a non-remediable assignment effect (Audit/Deny) with
+# roles still passes the old 'effect present' check but set_assignment never
+# selects it for remediation, so it would silently no-op. The guard must fail.
+run "pinned_remediation_audit_effect_with_roles_fails" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_dine = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_dine"]
+      }
+    }
+    assignments = {
+      requested_remediation = {
+        initiative_key      = "baseline"
+        scope               = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate           = true
+        effect              = "Audit"
+        role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+        # Audit is not a remediable effect, so set_assignment selects zero tasks
+      }
+    }
+  }
+
+  expect_failures = [
+    terraform_data.validate_pinned_remediation,
+  ]
+}
+
+# issue #58 (oracle P1): a pinned policy_rule that carries roleDefinitionIds but a
+# literal non-remediable effect (Audit) supplies identity but is never selected.
+run "pinned_remediation_policyrule_audit_effect_no_roles_fails" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_dine = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+        policy_rule = jsonencode({
+          if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+          then = {
+            effect = "Audit"
+            details = {
+              roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+            }
+          }
+        })
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_dine"]
+      }
+    }
+    assignments = {
+      requested_remediation = {
+        initiative_key = "baseline"
+        scope          = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate      = true
+      }
+    }
+  }
+
+  expect_failures = [
+    terraform_data.validate_pinned_remediation,
+  ]
+}
+
+# issue #58: explicit remediation_reference_ids plus assignment roles with an
+# unresolved effect must succeed and produce a non-empty reference set.
+run "pinned_remediation_roles_and_reference_unresolved_effect_succeeds" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_dine = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_dine"]
+      }
+    }
+    assignments = {
+      requested_remediation = {
+        initiative_key            = "baseline"
+        scope                     = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate                 = true
+        role_definition_ids       = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+        remediation_reference_ids = ["b7ddfbdc-e688-46bc-a468-2def594365a3"]
+        # no assignment effect / policy_rule effect: reference is selected explicitly
+      }
+    }
+  }
+
+  assert {
+    condition     = length(output.assignment_remediation_references["requested_remediation"]) >= 1
+    error_message = "Roles plus an explicit remediation_reference_id must satisfy the pinned built-in remediation contract for an unresolved effect (#58)"
+  }
+}

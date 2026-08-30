@@ -124,22 +124,36 @@ module "initiatives" {
 }
 
 locals {
+  # effects that set_assignment actually selects for remediation
+  remediable_effects = ["deployifnotexists", "modify"]
+
   # issue #55/#58: a request for pinned-policy remediation must either produce
   # at least one eligible remediation reference with a viable identity/RBAC
   # path, or fail fast at plan time. Two INDEPENDENT requirements are checked
   # per remediated pinned built-in member:
   #   1. selection — the member can be selected for remediation through a
-  #      caller-supplied policy_rule effect, an assignment effect, or explicit
-  #      remediation_reference_ids; and
+  #      REMEDIABLE effect (DeployIfNotExists/Modify) supplied via the
+  #      definition's policy_rule or an assignment effect, or through an explicit
+  #      remediation_reference_ids. A non-remediable literal effect (Audit/Deny)
+  #      or a parameterized/unknown effect is NOT automatically selectable
+  #      (set_assignment only selects DINE/Modify and resolves parameters at
+  #      runtime); explicit references are always honoured.
   #   2. identity/RBAC — a managed identity can be created through
   #      assignment-level role_definition_ids or roleDefinitionIds carried by
   #      the pinned member's policy_rule (aggregated into
   #      initiative.role_definition_ids).
   # set_assignment exposes members to remediation only when identity_type is
   # non-empty, so an effect/reference without roles silently creates zero
-  # remediation tasks; conversely roles without an effect source leave the
-  # member unselected. Either requirement unmet => plan-time failure naming
-  # the assignment/initiative/definition keys.
+  # remediation tasks; conversely roles without a remediable effect source
+  # leave the member unselected. Either requirement unmet => plan-time failure
+  # naming the assignment/initiative/definition keys.
+  # effective literal effect from a pinned policy_rule (JSON string or object)
+  member_literal_effect = {
+    for mk, d in var.definitions : mk => try(
+      lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect),
+      ""
+    )
+  }
   pinned_remediation_conflicts = distinct(flatten([
     for ak, a in var.assignments : [
       for pair in setproduct([ak], [a.initiative_key]) : [
@@ -148,16 +162,24 @@ locals {
         ) if a.remediate &&
         var.definitions[mk].source == "builtin" && var.definitions[mk].version != null &&
         !(
-          # 1. selection requirement
+          # 1. selection requirement — mirrors set_assignment eligibility
           (
-            var.definitions[mk].policy_rule != null ||
-            a.effect != null ||
             length(coalesce(a.remediation_reference_ids, [])) > 0
-            ) && (
+            || (
+              a.effect != null
+              ? contains(local.remediable_effects, lower(a.effect)) # explicit assignment effect must be remediable
+              : var.definitions[mk].policy_rule != null && (
+                # parameterized/unknown effect: cannot statically prove non-remediable; allow (set_assignment resolves at runtime)
+                can(regex("parameters\\(", local.member_literal_effect[mk]))
+                || contains(local.remediable_effects, local.member_literal_effect[mk]) # literal remediable effect
+              )
+            )
+          )
+          && (
             # 2. identity/RBAC requirement (policy_rule may be a JSON string
             #    or an already-decoded object; try handles both shapes)
-            length(coalesce(a.role_definition_ids, [])) > 0 ||
-            length(try(try(jsondecode(var.definitions[mk].policy_rule), var.definitions[mk].policy_rule).then.details.roleDefinitionIds, [])) > 0
+            length(coalesce(a.role_definition_ids, [])) > 0
+            || length(try(try(jsondecode(var.definitions[mk].policy_rule), var.definitions[mk].policy_rule).then.details.roleDefinitionIds, [])) > 0
           )
         )
       ]
@@ -169,7 +191,7 @@ resource "terraform_data" "validate_pinned_remediation" {
   lifecycle {
     precondition {
       condition     = length(local.pinned_remediation_conflicts) == 0
-      error_message = "Remediation requested (remediate = true) but pinned built-in remediation is not viable: ${join(", ", local.pinned_remediation_conflicts)}. Each remediated pinned built-in needs BOTH a selection source (the definition's policy_rule, an assignment effect, or explicit remediation_reference_ids) AND an identity/RBAC path (assignment role_definition_ids, or then.details.roleDefinitionIds inside the pinned policy_rule). Supply role_definition_ids plus an effect source, or a policy_rule containing both an effect and roleDefinitionIds."
+      error_message = "Remediation requested (remediate = true) but pinned built-in remediation is not viable: ${join(", ", local.pinned_remediation_conflicts)}. Each remediated pinned built-in needs BOTH a selection source (a remediable effect — DeployIfNotExists/Modify — from the definition's policy_rule or assignment effect, or explicit remediation_reference_ids) AND an identity/RBAC path (assignment role_definition_ids, or then.details.roleDefinitionIds inside the pinned policy_rule). A non-remediable effect (Audit/Deny) or missing roles yields zero remediation tasks."
     }
   }
 }
