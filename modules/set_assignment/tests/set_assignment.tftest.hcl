@@ -235,6 +235,76 @@ run "default_remediation_is_opt_in" {
   }
 }
 
+# issue #62: enforcementMode = DoNotEnforce must not suppress remediation for an
+# eligible member when remediation is explicitly requested.
+run "remediation_created_under_do_not_enforce" {
+  command = plan
+
+  variables {
+    assignment_enforcement_mode = false
+    remediate_effects           = ["DeployIfNotExists", "Modify"]
+    role_definition_ids         = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        { policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/dine_member", reference_id = "dine_member", parameter_values = jsonencode({ effect = { value = "DeployIfNotExists" } }) }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_selected_references) == 1 && contains(output.remediation_selected_references, "dine_member")
+    error_message = "enforcement=false must still expose an eligible DINE member for remediation (#62)"
+  }
+
+  assert {
+    condition     = output.enforcement_mode == false
+    error_message = "The assignment itself must keep DoNotEnforce while remediation proceeds (#62)"
+  }
+}
+
+# issue #62: skip_remediation remains an unconditional suppression path.
+run "do_not_enforce_with_skip_remediation_still_suppresses" {
+  command = plan
+
+  variables {
+    assignment_enforcement_mode = false
+    skip_remediation            = true
+    remediate_effects           = ["DeployIfNotExists", "Modify"]
+    role_definition_ids         = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        { policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/dine_member", reference_id = "dine_member", parameter_values = jsonencode({ effect = { value = "DeployIfNotExists" } }) }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_selected_references) == 0
+    error_message = "skip_remediation must suppress remediation even under DoNotEnforce (#62)"
+  }
+}
+
+# issue #62: Audit members never become remediable, regardless of enforcement.
+run "audit_member_under_do_not_enforce_still_not_remediable" {
+  command = plan
+
+  variables {
+    assignment_enforcement_mode = false
+    remediate_effects           = ["DeployIfNotExists", "Modify"]
+    role_definition_ids         = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        { policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/audit_member", reference_id = "audit_member", parameter_values = jsonencode({ effect = { value = "Audit" } }) }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_selected_references) == 0
+    error_message = "Audit must never be remediable regardless of enforcement mode (#62)"
+  }
+}
+
 run "explicit_reference_ids_reject_known_non_remediable_effect" {
   command = plan
 

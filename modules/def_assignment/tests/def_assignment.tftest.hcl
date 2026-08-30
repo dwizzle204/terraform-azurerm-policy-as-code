@@ -122,6 +122,48 @@ run "remediation_requires_explicit_effect_configuration" {
   }
 }
 
+# issue #62: enforcementMode = DoNotEnforce must not suppress an explicitly
+# requested remediation task (Azure supports manual DINE remediation under
+# DoNotEnforce). Request-time enforcement and remediation are decoupled.
+run "remediation_created_under_do_not_enforce" {
+  command = plan
+
+  variables {
+    assignment_enforcement_mode = false
+    remediate_effects           = ["DeployIfNotExists", "Modify"]
+    role_definition_ids         = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    definition                  = merge(var.definition, { policy_rule = jsonencode({ if = {}, then = { effect = "DeployIfNotExists" } }) })
+  }
+
+  assert {
+    condition     = output.remediation_id != ""
+    error_message = "enforcement=false with DINE + identity + remediation opt-in must still create a remediation task (#62)"
+  }
+
+  assert {
+    condition     = output.enforcement_mode == false
+    error_message = "The assignment itself must keep DoNotEnforce while remediation is created"
+  }
+}
+
+# issue #62: Audit assignments must never receive remediation, even with
+# enforcement disabled, identity, and explicit opt-in.
+run "audit_under_do_not_enforce_still_no_remediation" {
+  command = plan
+
+  variables {
+    assignment_enforcement_mode = false
+    remediate_effects           = ["DeployIfNotExists", "Modify"]
+    role_definition_ids         = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    definition                  = merge(var.definition, { policy_rule = jsonencode({ if = {}, then = { effect = "Audit" } }) })
+  }
+
+  assert {
+    condition     = output.remediation_id == ""
+    error_message = "Audit must never produce a remediation task regardless of enforcement mode (#62)"
+  }
+}
+
 run "assignment_effect_is_merged_into_parameters" {
   command = plan
 

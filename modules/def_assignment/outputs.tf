@@ -23,6 +23,12 @@ output "assignment_name" {
   value       = local.assignment_name
 }
 
+
+output "enforcement_mode" {
+  description = "The assignment's enforcementMode (request-time enforcement), independent of remediation task creation (#62)"
+  value       = var.assignment_enforcement_mode
+}
+
 output "parameters" {
   description = "The Parameter Values assigned to this Policy Assignment"
   value       = local.parameters
