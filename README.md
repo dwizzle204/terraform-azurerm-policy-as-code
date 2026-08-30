@@ -46,6 +46,15 @@
 
 Supported Terraform/provider versions: [COMPATIBILITY.md](COMPATIBILITY.md).
 
+## Versioning: catalog metadata vs Azure definitionVersion selectors
+
+These are two distinct concepts and are kept separate (issue [#59](https://github.com/dwizzle204/terraform-azurerm-policy-as-code/issues/59)):
+
+- **Organizational catalog version** — a free-form `metadata.version` on a custom policy definition (e.g. `"1.0.0"`) describes your content/catalog versioning. It is retained as `catalog_version` and never changes initiative reference semantics.
+- **Azure `definitionVersion` selector** — the `policy_definition_reference.version` attribute selects a *built-in* definition version (AzureRM grammar `{major}.{minor}[.*][-preview]`, e.g. `3.1`, `3.1.*`, `1.0.*-preview`). It is only emitted when you explicitly supply `version` on a member definition; ordinary module-created custom definitions emit no selector because no Azure Policy Definition Version resource is created or resolved on their behalf.
+
+If native custom-definition version resources are adopted later, they will be modeled explicitly and will not be inferred from catalog metadata.
+
 ## Testing
 
 This repository uses a layered, credential-free test strategy: fmt → tflint → constraint-consistency → per-module init/validate/`terraform test` with mocked providers (6 modules, 80+ runs, Terraform 1.11 + 1.15 matrix in CI) → 3 example-root validations → 7 expected-failure negative checks → isolated opt-in live-Azure suite. Normal PR validation requires no Azure tenant or credentials. See [TESTING.md](TESTING.md); run everything locally with `./scripts/test.sh`.

@@ -44,10 +44,12 @@ output "initiative" {
 
     policy_definition_reference = [
       for i in local.policy_definition_reference : {
-        parameter_values     = i.parameter_values
-        policy_definition_id = i.policy_definition_id
-        reference_id         = i.reference_id
-        version              = i.version
+        parameter_values         = i.parameter_values
+        policy_definition_id     = i.policy_definition_id
+        reference_id             = i.reference_id
+        version                  = i.version
+        catalog_version          = i.catalog_version
+        azure_definition_version = i.version
       }
     ]
   }
