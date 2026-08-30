@@ -629,6 +629,55 @@ run "pinned_remediation_policyrule_effect_no_roles_fails" {
   ]
 }
 
+# issue #58 (oracle P1): a literal policy_rule effect is only visible downstream
+# when the member schema declares an "effect" parameter (the initiative then
+# wraps it as "[parameters('effect')]"). Without that schema the initiative
+# emits no parameter_values, so set_assignment resolves "" and selects zero —
+# intent must fail fast instead of passing selection.
+run "pinned_remediation_literal_dine_no_schema_fails" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_dine = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+        policy_rule = jsonencode({
+          if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+          then = {
+            effect = "DeployIfNotExists"
+            details = {
+              roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+            }
+          }
+        })
+        # NO parameters: no "effect" schema => initiative emits no
+        # parameter_values => downstream resolves "" and selects zero
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_dine"]
+      }
+    }
+    assignments = {
+      requested_remediation = {
+        initiative_key = "baseline"
+        scope          = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate      = true
+        # no assignment effect, no explicit remediation_reference_ids
+      }
+    }
+  }
+
+  expect_failures = [
+    terraform_data.validate_pinned_remediation,
+  ]
+}
+
 run "pinned_remediation_policyrule_effect_and_roles_succeeds" {
   command = plan
 

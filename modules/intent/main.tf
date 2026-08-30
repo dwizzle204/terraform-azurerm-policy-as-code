@@ -183,12 +183,17 @@ locals {
   }
   # issue #58 (oracle P1): resolve the EFFECTIVE remediation effect per
   # (assignment, member) from the SAME normalized source set_assignment reads:
-  #   assignment effect overrides; otherwise a parameterized effect resolves
-  #   via assignment_parameters, then the member schema's defaultValue — but
-  #   ONLY when the member schema actually declares the parameter (otherwise
-  #   the initiative emits no parameter_values and the effect stays unresolved
-  #   ""). Non-parameterized policy_rule effects pass through as literals;
-  #   unresolvable effects stay "".
+  #   assignment effect overrides; otherwise the initiative emits
+  #   parameter_values ONLY from the member's parameter schema (null when the
+  #   schema is empty), so downstream reads parameter_values["effect"]:
+  #     - parameterized effect resolves via assignment_parameters, then the
+  #       member schema's defaultValue — but ONLY when the schema declares the
+  #       parameter (otherwise nothing is emitted and the effect stays "");
+  #     - a LITERAL policy_rule effect is only seen downstream when the schema
+  #       declares an "effect" parameter (then the initiative wraps it as
+  #       "[parameters('effect')]") — without that schema, downstream resolves
+  #       "" and the member is never selected. Literals without the schema are
+  #       therefore treated as unresolved here too.
   pinned_effective_effect = {
     for entry in flatten([
       for ak, a in var.assignments : [
@@ -205,7 +210,11 @@ locals {
                 ""
               )))
               : (
-                local.pinned_effect_is_parameterized[mk] ? "" : local.member_literal_effect[mk]
+                local.pinned_effect_is_parameterized[mk] ? "" : (
+                  # literal effect only reaches parameter_values when the schema
+                  # declares "effect"; otherwise downstream resolves "" (oracle P1 #58)
+                  local.pinned_member_has_effect_schema[mk] ? local.member_literal_effect[mk] : ""
+                )
               )
             )
           )
