@@ -147,13 +147,6 @@ locals {
   # remediation tasks; conversely roles without a remediable effect source
   # leave the member unselected. Either requirement unmet => plan-time failure
   # naming the assignment/initiative/definition keys.
-  # effective literal effect from a pinned policy_rule (JSON string or object)
-  member_literal_effect = {
-    for mk, d in var.definitions : mk => try(
-      lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect),
-      ""
-    )
-  }
   # issue #58 (oracle P1): reference ids MUST match what the initiative emits.
   # Intent uses the initiative module defaults (duplicate_members = false,
   # use_display_name_for_references = false, camel_case_references = false), so
@@ -161,16 +154,12 @@ locals {
   # built-ins: basename of the definition_id). Explicit remediation_reference_ids
   # are matched per member against this id, never by mere presence.
   member_reference_ids = { for k, v in local.all_definitions : k => v.name }
-  # parameter name captured from a parameterized policy_rule effect, e.g. "effect"
-  pinned_effect_param_name = {
-    for mk, d in var.definitions : mk => try(
-      regex("^\\[parameters\\('(.+?)'\\)\\]$", local.member_literal_effect[mk])[0],
-      ""
-    )
-  }
-  pinned_effect_is_parameterized = {
-    for mk in keys(var.definitions) : mk => local.pinned_effect_param_name[mk] != ""
-  }
+  # set_assignment reads parameter_values["effect"]: the initiative emits
+  # parameter_values ONLY from the member's parameter schema (null when the
+  # schema is empty), so a parameterized effect on a member without an
+  # "effect" schema key can never resolve downstream. The raw policy_rule
+  # parameter name is deliberately NOT resolved here (oracle P1: downstream
+  # always reads key "effect", never the rule's own param name).
   # set_assignment reads parameter_values["effect"]: the initiative emits
   # parameter_values ONLY from the member's parameter schema (null when the
   # schema is empty), so a parameterized effect on a member without an
@@ -199,8 +188,15 @@ locals {
           effective = a.effect != null ? lower(a.effect) : (
             local.pinned_member_has_effect_schema[mk]
             ? lower(tostring(try(
-              try(try(jsondecode(a.parameters), a.parameters), {})[local.pinned_effect_param_name[mk] != "" ? local.pinned_effect_param_name[mk] : "effect"],
-              try(jsondecode(local.all_definitions[mk].parameters), {})[local.pinned_effect_param_name[mk] != "" ? local.pinned_effect_param_name[mk] : "effect"].defaultValue,
+              # issue #58 (oracle P1): the initiative ALWAYS emits
+              # parameter_values as "[parameters('effect')]", so downstream
+              # (set_assignment) resolves the assignment/schema key "effect"
+              # exclusively. The raw policy_rule parameter name must never
+              # influence this path — e.g. rule referencing a "foo" param that
+              # defaults to DeployIfNotExists while the effect schema defaults
+              # to Audit resolves downstream to Audit, not DeployIfNotExists.
+              try(try(jsondecode(a.parameters), a.parameters), {})["effect"],
+              try(jsondecode(local.all_definitions[mk].parameters), {})["effect"].defaultValue,
               ""
             )))
             : ""

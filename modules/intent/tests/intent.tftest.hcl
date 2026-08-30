@@ -1235,3 +1235,71 @@ run "pinned_remediation_literal_dine_schema_default_audit_fails" {
     terraform_data.validate_pinned_remediation,
   ]
 }
+
+# issue #58 (oracle P1): the raw policy_rule parameter name must never influence
+# downstream resolution. Here the rule references a "foo" parameter defaulting to
+# DeployIfNotExists, but the schema's "effect" parameter defaults to Audit —
+# which is what the initiative emits and set_assignment resolves. Intent must
+# therefore resolve Audit (non-remediable) and fail, not DeployIfNotExists.
+run "pinned_remediation_param_name_mismatch_fails" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_dine = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+        parameters = jsonencode({
+          effect = {
+            type          = "String"
+            defaultValue  = "Audit"
+            allowedValues = ["Audit", "DeployIfNotExists", "Disabled"]
+            metadata = {
+              displayName = "Effect"
+            }
+          }
+          foo = {
+            type         = "String"
+            defaultValue = "DeployIfNotExists"
+            metadata = {
+              displayName = "Foo"
+            }
+          }
+        })
+        policy_rule = jsonencode({
+          if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+          then = {
+            effect = "[parameters('foo')]"
+            details = {
+              type              = "Microsoft.Insights/diagnosticSettings"
+              roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+            }
+          }
+        })
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_dine"]
+      }
+    }
+    assignments = {
+      requested_remediation = {
+        initiative_key      = "baseline"
+        scope               = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate           = true
+        role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+        # no assignment effect/reference: downstream resolves the "effect" schema
+        # default "Audit" (never the raw rule param "foo"), which is not
+        # remediable, so zero tasks would be created — the guard must fail
+      }
+    }
+  }
+
+  expect_failures = [
+    terraform_data.validate_pinned_remediation,
+  ]
+}
