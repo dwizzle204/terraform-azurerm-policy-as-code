@@ -180,7 +180,6 @@ jobs:
             sed -i 's/version = ">= 4.35, < 6.0"/version = "= 4.35.0"/' "$mod/versions.tf" 2>/dev/null || true
             sed -i 's/version = ">= 2.47, < 4.0"/version = "= 2.47.0"/' "$mod/versions.tf" 2>/dev/null || true
             sed -i 's/version = ">= 2.0, < 4.0"/version = "= 2.47.0"/' "$mod/versions.tf" 2>/dev/null || true
-            sed -i 's/version = ">= 3.1, < 4.0"/version = "= 3.6.0"/' "$mod/versions.tf" 2>/dev/null || true
             # assert the pin actually landed (fail loudly if the sed missed)
             grep -q 'azurerm' "$mod/versions.tf" && grep -q '= 4.35.0' "$mod/versions.tf" || { echo "azurerm floor pin did not land in $mod"; exit 1; }
             grep -q 'azuread' "$mod/versions.tf.bak" && { grep -q '= 2.47.0' "$mod/versions.tf" || { echo "azuread floor pin did not land in $mod"; exit 1; }; }
@@ -203,3 +202,33 @@ jobs:
             (cd "$mod" && terraform init -backend=false -upgrade -no-color >/dev/null)
           done
           echo "minimum-floor module tests passed"
+
+  # PR #41 review: run the consolidated offline gate script in CI so the
+  # cross-module negative checks it owns (parameter-conflict fail-fast, typed
+  # contract rejection, governed-waiver expiry, unknown remediation_reference_ids
+  # and the remediation sequencing graph) cannot regress between per-module
+  # matrix runs. Credential-free: mocked providers only, no Azure tenant.
+  offline-gates:
+    name: Offline Gates (scripts/test.sh, no Azure creds)
+    env:
+      TF_IN_AUTOMATION: true
+      TF_INPUT: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
+
+      - uses: hashicorp/setup-terraform@633666f66e0061ca3b725c73b2ec20cd13a8fdd1 # v2
+        with:
+          terraform_version: ~1.15.0
+          terraform_wrapper: false
+
+      - name: Install TFLint (pinned)
+        uses: terraform-linters/setup-tflint@19a52fbac37dacb22a09518e4ef6ee234f2d4987 # v4.0.0
+        with:
+          tflint_version: v0.64.0
+
+      - name: Offline Gates
+        env:
+          # authenticated GitHub API requests avoid runner-IP rate limits during tflint plugin init
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/test.sh

@@ -124,20 +124,123 @@ module "initiatives" {
 }
 
 locals {
-  # issue #55: pinned built-ins without policy_rule cannot silently
-  # degrade remediation to a no-op. When remediation is requested and the
-  # referenced initiative contains pinned built-in members lacking caller-
-  # supplied policy_rule (and no assignment-level effect source or explicit
-  # remediation_reference_ids), fail fast naming the keys. role_definition_ids
-  # alone are insufficient because they only provision identity; without an
-  # effect the member is excluded from remediation selection and would no-op.
+  # effects that set_assignment actually selects for remediation
+  remediable_effects = ["deployifnotexists", "modify"]
+
+  # issue #55/#58: a request for pinned-policy remediation must either produce
+  # at least one eligible remediation reference with a viable identity/RBAC
+  # path, or fail fast at plan time. Two INDEPENDENT requirements are checked
+  # per remediated pinned built-in member:
+  #   1. selection — mirrors set_assignment eligibility exactly: the member's
+  #      EFFECTIVE effect (assignment effect, else parameterized policy_rule
+  #      effect resolved via assignment parameters / member defaultValue) must
+  #      be remediable (DeployIfNotExists/Modify) and in remediate_effects or
+  #      named explicitly, OR an explicit remediation_reference_ids must be
+  #      supplied while the effect is UNRESOLVED. A known non-remediable effect
+  #      (Audit/Deny) is never selected, even with an explicit reference.
+  #   2. identity/RBAC — a managed identity can be created through
+  #      assignment-level role_definition_ids or roleDefinitionIds carried by
+  #      the pinned member's policy_rule (aggregated into
+  #      initiative.role_definition_ids).
+  # set_assignment exposes members to remediation only when identity_type is
+  # non-empty, so an effect/reference without roles silently creates zero
+  # remediation tasks; conversely roles without a remediable effect source
+  # leave the member unselected. Either requirement unmet => plan-time failure
+  # naming the assignment/initiative/definition keys.
+  # issue #58 (oracle P1): reference ids MUST match what the initiative emits.
+  # Intent uses the initiative module defaults (duplicate_members = false,
+  # use_display_name_for_references = false, camel_case_references = false), so
+  # the emitted reference_id is exactly the definition's name (for pinned
+  # built-ins: basename of the definition_id). Explicit remediation_reference_ids
+  # are matched per member against this id, never by mere presence.
+  member_reference_ids = { for k, v in local.all_definitions : k => v.name }
+  # set_assignment reads parameter_values["effect"]: the initiative emits
+  # parameter_values ONLY from the member's parameter schema (null when the
+  # schema is empty), so a parameterized effect on a member without an
+  # "effect" schema key can never resolve downstream. The raw policy_rule
+  # parameter name is deliberately NOT resolved here (oracle P1: downstream
+  # always reads key "effect", never the rule's own param name).
+  # set_assignment reads parameter_values["effect"]: the initiative emits
+  # parameter_values ONLY from the member's parameter schema (null when the
+  # schema is empty), so a parameterized effect on a member without an
+  # "effect" schema key can never resolve downstream.
+  pinned_member_has_effect_schema = {
+    for mk, d in var.definitions : mk => contains(
+      keys(try(jsondecode(local.all_definitions[mk].parameters), {})),
+      "effect"
+    )
+  }
+  # issue #58 (oracle P1): resolve the EFFECTIVE remediation effect per
+  # (assignment, member) from the SAME normalized source set_assignment reads:
+  #   assignment effect overrides; otherwise, WHEN the member's parameter
+  #   schema declares "effect", the initiative emits parameter_values as
+  #   "[parameters('effect')]" and downstream resolves the assignment
+  #   parameter, then the schema defaultValue — the raw policy_rule literal is
+  #   NEVER read. When the schema does NOT declare "effect", the initiative
+  #   emits no parameter_values and downstream resolves "" — the member is
+  #   never selected. So: schema present -> resolved param (never the literal);
+  #   schema absent -> "".
+  pinned_effective_effect = {
+    for entry in flatten([
+      for ak, a in var.assignments : [
+        for mk in var.initiatives[a.initiative_key].member_definition_keys : {
+          key = "${ak}|${mk}"
+          effective = a.effect != null ? lower(a.effect) : (
+            local.pinned_member_has_effect_schema[mk]
+            ? lower(tostring(try(
+              # issue #58 (oracle P1): the initiative ALWAYS emits
+              # parameter_values as "[parameters('effect')]", so downstream
+              # (set_assignment) resolves the assignment/schema key "effect"
+              # exclusively. The raw policy_rule parameter name must never
+              # influence this path — e.g. rule referencing a "foo" param that
+              # defaults to DeployIfNotExists while the effect schema defaults
+              # to Audit resolves downstream to Audit, not DeployIfNotExists.
+              try(try(jsondecode(a.parameters), a.parameters), {})["effect"],
+              try(jsondecode(local.all_definitions[mk].parameters), {})["effect"].defaultValue,
+              ""
+            )))
+            : ""
+          )
+        }
+      ]
+    ]) : entry.key => entry.effective
+  }
   pinned_remediation_conflicts = distinct(flatten([
     for ak, a in var.assignments : [
       for pair in setproduct([ak], [a.initiative_key]) : [
         for mk in var.initiatives[a.initiative_key].member_definition_keys : (
           "${ak} -> ${a.initiative_key} -> ${mk}"
-        ) if a.remediate && a.effect == null && length(coalesce(a.remediation_reference_ids, [])) == 0 &&
-        var.definitions[mk].source == "builtin" && var.definitions[mk].version != null && var.definitions[mk].policy_rule == null
+        ) if a.remediate &&
+        var.definitions[mk].source == "builtin" && var.definitions[mk].version != null &&
+        !(
+          # 1. selection requirement — mirrors set_assignment definitions filter
+          # exactly: (remediable effective effect AND (in remediate_effects OR
+          # explicitly referenced BY THIS MEMBER's reference_id)) OR (explicitly
+          # referenced BY THIS MEMBER AND the effective effect is unresolved "").
+          # A known non-remediable effect (Audit/Deny) is never selected, even
+          # when an explicit reference is supplied, and a reference naming a
+          # DIFFERENT member never satisfies this member.
+          (
+            (
+              contains(local.remediable_effects, local.pinned_effective_effect["${ak}|${mk}"])
+              && (
+                contains([for e in coalesce(a.remediate_effects, ["DeployIfNotExists", "Modify"]) : lower(e)], local.pinned_effective_effect["${ak}|${mk}"])
+                || contains(coalesce(a.remediation_reference_ids, []), local.member_reference_ids[mk])
+              )
+            )
+            || (
+              contains(coalesce(a.remediation_reference_ids, []), local.member_reference_ids[mk])
+              && local.pinned_effective_effect["${ak}|${mk}"] == ""
+            )
+          )
+          && (
+            # 2. identity/RBAC requirement — the same source the initiative
+            #    aggregates into initiative.role_definition_ids (policy_rule may
+            #    be a JSON string or an already-decoded object; try handles both)
+            length(coalesce(a.role_definition_ids, [])) > 0
+            || length(try(jsondecode(local.all_definitions[mk].policy_rule).then.details.roleDefinitionIds, [])) > 0
+          )
+        )
       ]
     ]
   ]))
@@ -147,7 +250,7 @@ resource "terraform_data" "validate_pinned_remediation" {
   lifecycle {
     precondition {
       condition     = length(local.pinned_remediation_conflicts) == 0
-      error_message = "Remediation requested for assignments containing pinned built-ins without policy_rule/roles or an effect source: ${join(", ", local.pinned_remediation_conflicts)}. Supply role_definition_ids plus assignment_effect, explicit remediation_reference_ids plus assignment_effect, or the pinned definition's policy_rule."
+      error_message = "Remediation requested (remediate = true) but pinned built-in remediation is not viable: ${join(", ", local.pinned_remediation_conflicts)}. Each remediated pinned built-in needs BOTH a selection source (a remediable effect — DeployIfNotExists/Modify — from the definition's policy_rule or assignment effect, or explicit remediation_reference_ids) AND an identity/RBAC path (assignment role_definition_ids, or then.details.roleDefinitionIds inside the pinned policy_rule). A non-remediable effect (Audit/Deny) or missing roles yields zero remediation tasks."
     }
   }
 }
