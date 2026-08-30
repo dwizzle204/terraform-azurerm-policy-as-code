@@ -124,20 +124,42 @@ module "initiatives" {
 }
 
 locals {
-  # issue #55: pinned built-ins without policy_rule cannot silently
-  # degrade remediation to a no-op. When remediation is requested and the
-  # referenced initiative contains pinned built-in members lacking caller-
-  # supplied policy_rule (and no assignment-level effect source or explicit
-  # remediation_reference_ids), fail fast naming the keys. role_definition_ids
-  # alone are insufficient because they only provision identity; without an
-  # effect the member is excluded from remediation selection and would no-op.
+  # issue #55/#58: a request for pinned-policy remediation must either produce
+  # at least one eligible remediation reference with a viable identity/RBAC
+  # path, or fail fast at plan time. Two INDEPENDENT requirements are checked
+  # per remediated pinned built-in member:
+  #   1. selection — the member can be selected for remediation through a
+  #      caller-supplied policy_rule effect, an assignment effect, or explicit
+  #      remediation_reference_ids; and
+  #   2. identity/RBAC — a managed identity can be created through
+  #      assignment-level role_definition_ids or roleDefinitionIds carried by
+  #      the pinned member's policy_rule (aggregated into
+  #      initiative.role_definition_ids).
+  # set_assignment exposes members to remediation only when identity_type is
+  # non-empty, so an effect/reference without roles silently creates zero
+  # remediation tasks; conversely roles without an effect source leave the
+  # member unselected. Either requirement unmet => plan-time failure naming
+  # the assignment/initiative/definition keys.
   pinned_remediation_conflicts = distinct(flatten([
     for ak, a in var.assignments : [
       for pair in setproduct([ak], [a.initiative_key]) : [
         for mk in var.initiatives[a.initiative_key].member_definition_keys : (
           "${ak} -> ${a.initiative_key} -> ${mk}"
-        ) if a.remediate && a.effect == null && length(coalesce(a.remediation_reference_ids, [])) == 0 &&
-        var.definitions[mk].source == "builtin" && var.definitions[mk].version != null && var.definitions[mk].policy_rule == null
+        ) if a.remediate &&
+        var.definitions[mk].source == "builtin" && var.definitions[mk].version != null &&
+        !(
+          # 1. selection requirement
+          (
+            var.definitions[mk].policy_rule != null ||
+            a.effect != null ||
+            length(coalesce(a.remediation_reference_ids, [])) > 0
+            ) && (
+            # 2. identity/RBAC requirement (policy_rule may be a JSON string
+            #    or an already-decoded object; try handles both shapes)
+            length(coalesce(a.role_definition_ids, [])) > 0 ||
+            length(try(try(jsondecode(var.definitions[mk].policy_rule), var.definitions[mk].policy_rule).then.details.roleDefinitionIds, [])) > 0
+          )
+        )
       ]
     ]
   ]))
@@ -147,7 +169,7 @@ resource "terraform_data" "validate_pinned_remediation" {
   lifecycle {
     precondition {
       condition     = length(local.pinned_remediation_conflicts) == 0
-      error_message = "Remediation requested for assignments containing pinned built-ins without policy_rule/roles or an effect source: ${join(", ", local.pinned_remediation_conflicts)}. Supply role_definition_ids plus assignment_effect, explicit remediation_reference_ids plus assignment_effect, or the pinned definition's policy_rule."
+      error_message = "Remediation requested (remediate = true) but pinned built-in remediation is not viable: ${join(", ", local.pinned_remediation_conflicts)}. Each remediated pinned built-in needs BOTH a selection source (the definition's policy_rule, an assignment effect, or explicit remediation_reference_ids) AND an identity/RBAC path (assignment role_definition_ids, or then.details.roleDefinitionIds inside the pinned policy_rule). Supply role_definition_ids plus an effect source, or a policy_rule containing both an effect and roleDefinitionIds."
     }
   }
 }

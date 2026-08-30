@@ -544,3 +544,177 @@ run "pinned_remediation_roles_without_effect_still_fails" {
     terraform_data.validate_pinned_remediation,
   ]
 }
+
+# NOTE (#58): "pinned built-in + explicit remediation_reference_ids + no roles"
+# already fails loudly at plan time via set_assignment's reference validation:
+# with no identity, member_definitions is empty, so any reference id is reported
+# as unknown. That hard local error cannot be listed in expect_failures, so it
+# cannot be isolated in a tftest alongside the intent guard. The genuinely
+# SILENT no-op paths (effect without roles, policy_rule effect without
+# roleDefinitionIds) are covered by the runs below and by the strengthened
+# intent guard.
+
+run "pinned_remediation_effect_no_roles_fails" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_dine = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_dine"]
+      }
+    }
+    assignments = {
+      requested_remediation = {
+        initiative_key = "baseline"
+        scope          = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate      = true
+        effect         = "DeployIfNotExists"
+        # no role_definition_ids and no policy_rule roleDefinitionIds:
+        # identity_type stays empty so remediation would silently no-op (#58)
+      }
+    }
+  }
+
+  expect_failures = [
+    terraform_data.validate_pinned_remediation,
+  ]
+}
+
+run "pinned_remediation_policyrule_effect_no_roles_fails" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_dine = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+        policy_rule = jsonencode({
+          if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+          then = {
+            effect = "DeployIfNotExists"
+            # no details.roleDefinitionIds: selection is satisfied but no
+            # identity/RBAC path exists, so remediation would no-op (#58)
+          }
+        })
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_dine"]
+      }
+    }
+    assignments = {
+      requested_remediation = {
+        initiative_key = "baseline"
+        scope          = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate      = true
+      }
+    }
+  }
+
+  expect_failures = [
+    terraform_data.validate_pinned_remediation,
+  ]
+}
+
+run "pinned_remediation_policyrule_effect_and_roles_succeeds" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_dine = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+        parameters = jsonencode({
+          effect = {
+            type          = "String"
+            defaultValue  = "DeployIfNotExists"
+            allowedValues = ["DeployIfNotExists", "Audit", "Disabled"]
+            metadata = {
+              displayName = "Effect"
+            }
+          }
+        })
+        policy_rule = jsonencode({
+          if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+          then = {
+            effect = "[parameters('effect')]"
+            details = {
+              type              = "Microsoft.Insights/diagnosticSettings"
+              roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+            }
+          }
+        })
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_dine"]
+      }
+    }
+    assignments = {
+      requested_remediation = {
+        initiative_key = "baseline"
+        scope          = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate      = true
+        # no assignment roles/effect: the policy_rule supplies both the
+        # remediable effect (via parameter default) and roleDefinitionIds
+      }
+    }
+  }
+
+  assert {
+    condition     = length(output.assignment_remediation_references["requested_remediation"]) >= 1
+    error_message = "A pinned policy_rule carrying both a remediable effect and roleDefinitionIds must produce at least one remediation reference (#58)"
+  }
+}
+
+run "pinned_not_remediated_stays_lightweight" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_audit = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_audit"]
+      }
+    }
+    assignments = {
+      audit_only = {
+        initiative_key = "baseline"
+        scope          = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate      = false
+      }
+    }
+  }
+
+  # a pinned Audit/Deny member without remediation stays lightweight: no
+  # identity/RBAC or effect requirements are imposed
+  assert {
+    condition     = length(output.assignment_remediation_references["audit_only"]) == 0
+    error_message = "Non-remediated pinned members must not produce remediation references or trigger the pinned-remediation guard (#58)"
+  }
+}

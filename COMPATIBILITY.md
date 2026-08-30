@@ -1,7 +1,12 @@
 # Compatibility Matrix
 
 Single source of truth for the Terraform and provider versions this repository
-is validated against. All six modules (`definition`, `initiative`, `exemption`, `def_assignment`, `set_assignment`, `intent`) declare identical constraints.
+is validated against. Every module declares the same Terraform and AzureRM
+floor; the AzureAD constraint is declared only by the modules that actually
+require it (`def_assignment` and `set_assignment` for group membership, and
+`intent` transitively so the provider configuration passes through to them).
+Modules that never touch AzureAD (`definition`, `initiative`, `exemption`) do
+not declare it.
 
 | Component | Minimum | Tested | Notes |
 |-----------|---------|--------|-------|
@@ -12,7 +17,7 @@ is validated against. All six modules (`definition`, `initiative`, `exemption`, 
 CI runs the offline module suite against two Terraform lines (`~1.11`, `~1.15`)
 with current providers, plus a dedicated **provider-compatibility** job that
 initializes/validates every module at the minimum floors (`azurerm 4.35.0`,
-`azuread 2.47.0`, `random 3.6.0`). Together both the floors and the open
+`azuread 2.47.0`). Together both the floors and the open
 upper bounds are exercised.
 
 ## Upgrade guidance

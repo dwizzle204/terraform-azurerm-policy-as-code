@@ -34,3 +34,7 @@ terraform.rc
 # agent workflow artifacts (superpowers plans/brainstorms/reviews)
 docs/superpowers/
 .pi/
+
+# local runtime/tool artifacts (grep-app/LSP servers etc.) - never commit (#58)
+logs/
+*.audit.json
