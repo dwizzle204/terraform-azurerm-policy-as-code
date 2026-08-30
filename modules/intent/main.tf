@@ -154,11 +154,41 @@ locals {
       ""
     )
   }
+  # issue #58 (oracle P1): reference ids MUST match what the initiative emits.
+  # Intent uses the initiative module defaults (duplicate_members = false,
+  # use_display_name_for_references = false, camel_case_references = false), so
+  # the emitted reference_id is exactly the definition's name (for pinned
+  # built-ins: basename of the definition_id). Explicit remediation_reference_ids
+  # are matched per member against this id, never by mere presence.
+  member_reference_ids = { for k, v in local.all_definitions : k => v.name }
+  # parameter name captured from a parameterized policy_rule effect, e.g. "effect"
+  pinned_effect_param_name = {
+    for mk, d in var.definitions : mk => try(
+      regex("^\\[parameters\\('(.+?)'\\)\\]$", local.member_literal_effect[mk])[0],
+      ""
+    )
+  }
+  pinned_effect_is_parameterized = {
+    for mk in keys(var.definitions) : mk => local.pinned_effect_param_name[mk] != ""
+  }
+  # set_assignment reads parameter_values["effect"]: the initiative emits
+  # parameter_values ONLY from the member's parameter schema (null when the
+  # schema is empty), so a parameterized effect on a member without an
+  # "effect" schema key can never resolve downstream.
+  pinned_member_has_effect_schema = {
+    for mk, d in var.definitions : mk => contains(
+      keys(try(jsondecode(local.all_definitions[mk].parameters), {})),
+      "effect"
+    )
+  }
   # issue #58 (oracle P1): resolve the EFFECTIVE remediation effect per
-  # (assignment, member) exactly the way set_assignment does:
-  #   assignment effect overrides; otherwise a parameterized effect
-  #   "[parameters('x')]" resolves to assignment_parameters[x] first, then the
-  #   member parameter schema's defaultValue; unresolvable effects stay "".
+  # (assignment, member) from the SAME normalized source set_assignment reads:
+  #   assignment effect overrides; otherwise a parameterized effect resolves
+  #   via assignment_parameters, then the member schema's defaultValue — but
+  #   ONLY when the member schema actually declares the parameter (otherwise
+  #   the initiative emits no parameter_values and the effect stays unresolved
+  #   ""). Non-parameterized policy_rule effects pass through as literals;
+  #   unresolvable effects stay "".
   pinned_effective_effect = {
     for entry in flatten([
       for ak, a in var.assignments : [
@@ -168,13 +198,15 @@ locals {
             a.effect != null
             ? lower(a.effect)
             : (
-              can(regex("^\\[parameters\\('(.+?)'\\)\\]$", local.member_literal_effect[mk]))
+              local.pinned_effect_is_parameterized[mk] && local.pinned_member_has_effect_schema[mk]
               ? lower(tostring(try(
-                try(try(jsondecode(a.parameters), a.parameters), {})[regex("^\\[parameters\\('(.+?)'\\)\\]$", local.member_literal_effect[mk])[0]],
-                try(try(jsondecode(var.definitions[mk].parameters), var.definitions[mk].parameters), {})[regex("^\\[parameters\\('(.+?)'\\)\\]$", local.member_literal_effect[mk])[0]].defaultValue,
+                try(try(jsondecode(a.parameters), a.parameters), {})[local.pinned_effect_param_name[mk]],
+                try(jsondecode(local.all_definitions[mk].parameters), {})[local.pinned_effect_param_name[mk]].defaultValue,
                 ""
               )))
-              : local.member_literal_effect[mk]
+              : (
+                local.pinned_effect_is_parameterized[mk] ? "" : local.member_literal_effect[mk]
+              )
             )
           )
         }
@@ -189,30 +221,32 @@ locals {
         ) if a.remediate &&
         var.definitions[mk].source == "builtin" && var.definitions[mk].version != null &&
         !(
-          # 1. selection requirement — mirrors set_assignment eligibility exactly:
-          # selected only with a REMEDIABLE resolved effect (DeployIfNotExists/
-          # Modify) that is in remediate_effects or named explicitly, OR with an
-          # explicit remediation_reference_id while the effect is UNRESOLVED ("").
+          # 1. selection requirement — mirrors set_assignment definitions filter
+          # exactly: (remediable effective effect AND (in remediate_effects OR
+          # explicitly referenced BY THIS MEMBER's reference_id)) OR (explicitly
+          # referenced BY THIS MEMBER AND the effective effect is unresolved "").
           # A known non-remediable effect (Audit/Deny) is never selected, even
-          # when an explicit reference is supplied.
+          # when an explicit reference is supplied, and a reference naming a
+          # DIFFERENT member never satisfies this member.
           (
             (
               contains(local.remediable_effects, local.pinned_effective_effect["${ak}|${mk}"])
               && (
-                contains([for e in a.remediate_effects : lower(e)], local.pinned_effective_effect["${ak}|${mk}"])
-                || length(coalesce(a.remediation_reference_ids, [])) > 0
+                contains([for e in coalesce(a.remediate_effects, ["DeployIfNotExists", "Modify"]) : lower(e)], local.pinned_effective_effect["${ak}|${mk}"])
+                || contains(coalesce(a.remediation_reference_ids, []), local.member_reference_ids[mk])
               )
             )
             || (
-              length(coalesce(a.remediation_reference_ids, [])) > 0
+              contains(coalesce(a.remediation_reference_ids, []), local.member_reference_ids[mk])
               && local.pinned_effective_effect["${ak}|${mk}"] == ""
             )
           )
           && (
-            # 2. identity/RBAC requirement (policy_rule may be a JSON string
-            #    or an already-decoded object; try handles both shapes)
+            # 2. identity/RBAC requirement — the same source the initiative
+            #    aggregates into initiative.role_definition_ids (policy_rule may
+            #    be a JSON string or an already-decoded object; try handles both)
             length(coalesce(a.role_definition_ids, [])) > 0
-            || length(try(try(jsondecode(var.definitions[mk].policy_rule), var.definitions[mk].policy_rule).then.details.roleDefinitionIds, [])) > 0
+            || length(try(jsondecode(local.all_definitions[mk].policy_rule).then.details.roleDefinitionIds, [])) > 0
           )
         )
       ]

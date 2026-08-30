@@ -993,3 +993,137 @@ run "pinned_remediation_parameterized_effect_assignment_override_succeeds" {
     error_message = "A parameterized effect resolved to DeployIfNotExists via assignment parameters must produce remediation references (#58)"
   }
 }
+
+# issue #58 (oracle P1): an explicit remediation_reference_id for THIS member
+# must NOT make a known non-remediable effect (Audit) selectable. set_assignment
+# only selects Audit members via explicit references when the effect is
+# UNRESOLVED, so this must still fail fast.
+run "pinned_remediation_audit_effect_with_explicit_reference_fails" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_dine = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_dine"]
+      }
+    }
+    assignments = {
+      requested_remediation = {
+        initiative_key            = "baseline"
+        scope                     = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate                 = true
+        effect                    = "Audit"
+        role_definition_ids       = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+        remediation_reference_ids = ["b7ddfbdc-e688-46bc-a468-2def594365a3"]
+        # Audit is never selected, even with an explicit reference for this member
+      }
+    }
+  }
+
+  expect_failures = [
+    terraform_data.validate_pinned_remediation,
+  ]
+}
+
+# issue #58 (oracle P1): a parameterized policy_rule effect on a member WITHOUT
+# an "effect" parameter schema resolves to "" downstream (the initiative emits
+# no parameter_values), so assignment parameters cannot rescue it. With no
+# explicit reference this must fail fast.
+run "pinned_remediation_parameterized_effect_without_schema_fails" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_dine = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+        policy_rule = jsonencode({
+          if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+          then = {
+            effect = "[parameters('effect')]"
+            details = {
+              roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+            }
+          }
+        })
+        # NO parameters schema: initiative emits parameter_values = null, so the
+        # effect stays unresolved downstream no matter what assignment supplies
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_dine"]
+      }
+    }
+    assignments = {
+      requested_remediation = {
+        initiative_key      = "baseline"
+        scope               = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate           = true
+        role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+        parameters = {
+          effect = "DeployIfNotExists"
+        }
+      }
+    }
+  }
+
+  expect_failures = [
+    terraform_data.validate_pinned_remediation,
+  ]
+}
+
+# issue #58 (oracle P1): a remediation_reference_id naming a DIFFERENT member
+# must never satisfy THIS member's selection requirement (per-member matching).
+run "pinned_remediation_reference_for_other_member_fails" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_a = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+      }
+      pinned_b = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/0b5a2f9e-3c47-4d8a-9f01-2a3b4c5d6e7f"
+        version       = "3.1"
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_a", "pinned_b"]
+      }
+    }
+    assignments = {
+      requested_remediation = {
+        initiative_key            = "baseline"
+        scope                     = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate                 = true
+        role_definition_ids       = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+        remediation_reference_ids = ["0b5a2f9e-3c47-4d8a-9f01-2a3b4c5d6e7f"]
+        # only pinned_b is referenced: pinned_a has an unresolved effect and no
+        # reference of its own, so it would silently no-op
+      }
+    }
+  }
+
+  expect_failures = [
+    terraform_data.validate_pinned_remediation,
+  ]
+}
