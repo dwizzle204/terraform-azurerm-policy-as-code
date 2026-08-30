@@ -334,7 +334,11 @@ locals {
     file("[ERROR] def_assignment: remediation_reference_ids [${join(", ", var.remediation_reference_ids)}] do not include this definition ('${try(var.definition.name, "")}'). Valid id: '${try(var.definition.name, "")}'.") :
     true
   )
-  create_remediation = var.assignment_enforcement_mode == true && var.skip_remediation == false && length(local.identity_type) > 0 && local.unknown_remediation_references == true && local.definition_eligible ? 1 : 0
+  # issue #62: remediation under DoNotEnforce is Azure-supported (manual
+  # remediation of deployIfNotExists works with enforcementMode = DoNotEnforce),
+  # so assignment_enforcement_mode no longer gates remediation task creation.
+  # Request-time enforcement stays decoupled from explicitly requested remediation.
+  create_remediation = var.skip_remediation == false && length(local.identity_type) > 0 && local.unknown_remediation_references == true && local.definition_eligible ? 1 : 0
 
   # assignment location is required when identity is specified
   assignment_location = length(local.identity_type) > 0 ? var.assignment_location : null
