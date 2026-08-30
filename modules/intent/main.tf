@@ -183,40 +183,27 @@ locals {
   }
   # issue #58 (oracle P1): resolve the EFFECTIVE remediation effect per
   # (assignment, member) from the SAME normalized source set_assignment reads:
-  #   assignment effect overrides; otherwise the initiative emits
-  #   parameter_values ONLY from the member's parameter schema (null when the
-  #   schema is empty), so downstream reads parameter_values["effect"]:
-  #     - parameterized effect resolves via assignment_parameters, then the
-  #       member schema's defaultValue — but ONLY when the schema declares the
-  #       parameter (otherwise nothing is emitted and the effect stays "");
-  #     - a LITERAL policy_rule effect is only seen downstream when the schema
-  #       declares an "effect" parameter (then the initiative wraps it as
-  #       "[parameters('effect')]") — without that schema, downstream resolves
-  #       "" and the member is never selected. Literals without the schema are
-  #       therefore treated as unresolved here too.
+  #   assignment effect overrides; otherwise, WHEN the member's parameter
+  #   schema declares "effect", the initiative emits parameter_values as
+  #   "[parameters('effect')]" and downstream resolves the assignment
+  #   parameter, then the schema defaultValue — the raw policy_rule literal is
+  #   NEVER read. When the schema does NOT declare "effect", the initiative
+  #   emits no parameter_values and downstream resolves "" — the member is
+  #   never selected. So: schema present -> resolved param (never the literal);
+  #   schema absent -> "".
   pinned_effective_effect = {
     for entry in flatten([
       for ak, a in var.assignments : [
         for mk in var.initiatives[a.initiative_key].member_definition_keys : {
           key = "${ak}|${mk}"
-          effective = (
-            a.effect != null
-            ? lower(a.effect)
-            : (
-              local.pinned_effect_is_parameterized[mk] && local.pinned_member_has_effect_schema[mk]
-              ? lower(tostring(try(
-                try(try(jsondecode(a.parameters), a.parameters), {})[local.pinned_effect_param_name[mk]],
-                try(jsondecode(local.all_definitions[mk].parameters), {})[local.pinned_effect_param_name[mk]].defaultValue,
-                ""
-              )))
-              : (
-                local.pinned_effect_is_parameterized[mk] ? "" : (
-                  # literal effect only reaches parameter_values when the schema
-                  # declares "effect"; otherwise downstream resolves "" (oracle P1 #58)
-                  local.pinned_member_has_effect_schema[mk] ? local.member_literal_effect[mk] : ""
-                )
-              )
-            )
+          effective = a.effect != null ? lower(a.effect) : (
+            local.pinned_member_has_effect_schema[mk]
+            ? lower(tostring(try(
+              try(try(jsondecode(a.parameters), a.parameters), {})[local.pinned_effect_param_name[mk] != "" ? local.pinned_effect_param_name[mk] : "effect"],
+              try(jsondecode(local.all_definitions[mk].parameters), {})[local.pinned_effect_param_name[mk] != "" ? local.pinned_effect_param_name[mk] : "effect"].defaultValue,
+              ""
+            )))
+            : ""
           )
         }
       ]
