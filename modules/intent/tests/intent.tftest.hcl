@@ -292,6 +292,42 @@ run "remediation_reachable_through_intent" {
   }
 }
 
+# issue #62: enforcement=false (DoNotEnforce) + remediate=true must still produce
+# remediation references when all other requirements (effect, identity) hold.
+run "remediation_reachable_under_do_not_enforce" {
+  command = plan
+
+  variables {
+    assignments = {
+      dine_remediation = {
+        initiative_key            = "platform_baseline"
+        scope                     = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        enforcement               = false
+        role_definition_ids       = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+        remediate_effects         = ["DeployIfNotExists", "Modify"]
+        remediation_reference_ids = []
+        remediate                 = true
+      }
+    }
+    initiatives = {
+      platform_baseline = merge(var.initiatives.platform_baseline, {
+        member_definition_keys = ["dine_member"]
+      })
+    }
+    definitions = {
+      dine_member = {
+        category    = "Monitoring"
+        policy_name = "deploy_vnet_diagnostic_setting"
+      }
+    }
+  }
+
+  assert {
+    condition     = length(output.assignment_remediation_references["dine_remediation"]) > 0
+    error_message = "DoNotEnforce assignments must still produce non-empty remediation references when effect and identity are valid (#62)"
+  }
+}
+
 run "subscription_only_definitions_resolve_without_error" {
   command = plan
 

@@ -318,8 +318,12 @@ locals {
   # issue #1/#3: remediation is opt-in and effect-aware. Per-member effective
   # effect comes from the reference parameter_values; explicit
   # remediation_reference_ids override effect resolution per member.
+  # issue #62: remediation under DoNotEnforce is Azure-supported (manual
+  # remediation of deployIfNotExists works with enforcementMode = DoNotEnforce),
+  # so assignment_enforcement_mode no longer gates member exposure to remediation
+  # selection. skip_remediation and a viable identity remain required.
   # tflint-ignore: terraform_empty_list_equality
-  member_definitions = var.assignment_enforcement_mode == true && var.skip_remediation == false && length(local.identity_type) > 0 ? (var.initiative.policy_definition_reference != [] && var.initiative.policy_definition_reference != null ? var.initiative.policy_definition_reference : []) : []
+  member_definitions = var.skip_remediation == false && length(local.identity_type) > 0 ? (var.initiative.policy_definition_reference != [] && var.initiative.policy_definition_reference != null ? var.initiative.policy_definition_reference : []) : []
   # issue #1/#3: robust per-member effect resolution for remediation filtering.
   # Member effects appear as literals ("DeployIfNotExists"/"deployIfNotExists")
   # or initiative interpolations "[parameters('effect')]". Interpolations
