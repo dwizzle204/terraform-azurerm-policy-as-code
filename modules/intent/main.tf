@@ -131,13 +131,13 @@ locals {
   # at least one eligible remediation reference with a viable identity/RBAC
   # path, or fail fast at plan time. Two INDEPENDENT requirements are checked
   # per remediated pinned built-in member:
-  #   1. selection — the member can be selected for remediation through a
-  #      REMEDIABLE effect (DeployIfNotExists/Modify) supplied via the
-  #      definition's policy_rule or an assignment effect, or through an explicit
-  #      remediation_reference_ids. A non-remediable literal effect (Audit/Deny)
-  #      or a parameterized/unknown effect is NOT automatically selectable
-  #      (set_assignment only selects DINE/Modify and resolves parameters at
-  #      runtime); explicit references are always honoured.
+  #   1. selection — mirrors set_assignment eligibility exactly: the member's
+  #      EFFECTIVE effect (assignment effect, else parameterized policy_rule
+  #      effect resolved via assignment parameters / member defaultValue) must
+  #      be remediable (DeployIfNotExists/Modify) and in remediate_effects or
+  #      named explicitly, OR an explicit remediation_reference_ids must be
+  #      supplied while the effect is UNRESOLVED. A known non-remediable effect
+  #      (Audit/Deny) is never selected, even with an explicit reference.
   #   2. identity/RBAC — a managed identity can be created through
   #      assignment-level role_definition_ids or roleDefinitionIds carried by
   #      the pinned member's policy_rule (aggregated into
@@ -154,6 +154,33 @@ locals {
       ""
     )
   }
+  # issue #58 (oracle P1): resolve the EFFECTIVE remediation effect per
+  # (assignment, member) exactly the way set_assignment does:
+  #   assignment effect overrides; otherwise a parameterized effect
+  #   "[parameters('x')]" resolves to assignment_parameters[x] first, then the
+  #   member parameter schema's defaultValue; unresolvable effects stay "".
+  pinned_effective_effect = {
+    for entry in flatten([
+      for ak, a in var.assignments : [
+        for mk in var.initiatives[a.initiative_key].member_definition_keys : {
+          key = "${ak}|${mk}"
+          effective = (
+            a.effect != null
+            ? lower(a.effect)
+            : (
+              can(regex("^\\[parameters\\('(.+?)'\\)\\]$", local.member_literal_effect[mk]))
+              ? lower(tostring(try(
+                try(try(jsondecode(a.parameters), a.parameters), {})[regex("^\\[parameters\\('(.+?)'\\)\\]$", local.member_literal_effect[mk])[0]],
+                try(try(jsondecode(var.definitions[mk].parameters), var.definitions[mk].parameters), {})[regex("^\\[parameters\\('(.+?)'\\)\\]$", local.member_literal_effect[mk])[0]].defaultValue,
+                ""
+              )))
+              : local.member_literal_effect[mk]
+            )
+          )
+        }
+      ]
+    ]) : entry.key => entry.effective
+  }
   pinned_remediation_conflicts = distinct(flatten([
     for ak, a in var.assignments : [
       for pair in setproduct([ak], [a.initiative_key]) : [
@@ -162,17 +189,23 @@ locals {
         ) if a.remediate &&
         var.definitions[mk].source == "builtin" && var.definitions[mk].version != null &&
         !(
-          # 1. selection requirement — mirrors set_assignment eligibility
+          # 1. selection requirement — mirrors set_assignment eligibility exactly:
+          # selected only with a REMEDIABLE resolved effect (DeployIfNotExists/
+          # Modify) that is in remediate_effects or named explicitly, OR with an
+          # explicit remediation_reference_id while the effect is UNRESOLVED ("").
+          # A known non-remediable effect (Audit/Deny) is never selected, even
+          # when an explicit reference is supplied.
           (
-            length(coalesce(a.remediation_reference_ids, [])) > 0
-            || (
-              a.effect != null
-              ? contains(local.remediable_effects, lower(a.effect)) # explicit assignment effect must be remediable
-              : var.definitions[mk].policy_rule != null && (
-                # parameterized/unknown effect: cannot statically prove non-remediable; allow (set_assignment resolves at runtime)
-                can(regex("parameters\\(", local.member_literal_effect[mk]))
-                || contains(local.remediable_effects, local.member_literal_effect[mk]) # literal remediable effect
+            (
+              contains(local.remediable_effects, local.pinned_effective_effect["${ak}|${mk}"])
+              && (
+                contains([for e in a.remediate_effects : lower(e)], local.pinned_effective_effect["${ak}|${mk}"])
+                || length(coalesce(a.remediation_reference_ids, [])) > 0
               )
+            )
+            || (
+              length(coalesce(a.remediation_reference_ids, [])) > 0
+              && local.pinned_effective_effect["${ak}|${mk}"] == ""
             )
           )
           && (

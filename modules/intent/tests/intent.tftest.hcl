@@ -837,3 +837,159 @@ run "pinned_remediation_roles_and_reference_unresolved_effect_succeeds" {
     error_message = "Roles plus an explicit remediation_reference_id must satisfy the pinned built-in remediation contract for an unresolved effect (#58)"
   }
 }
+
+# issue #58 (oracle P1): an explicit remediation_reference_id does NOT rescue a
+# known non-remediable effect — set_assignment rejects Audit/Deny references, so
+# roles + reference + effect = "Audit" must still fail fast at plan time.
+run "pinned_remediation_explicit_ref_audit_effect_fails" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_dine = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_dine"]
+      }
+    }
+    assignments = {
+      requested_remediation = {
+        initiative_key            = "baseline"
+        scope                     = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate                 = true
+        effect                    = "Audit"
+        role_definition_ids       = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+        remediation_reference_ids = ["b7ddfbdc-e688-46bc-a468-2def594365a3"]
+        # Audit is not a remediable effect: the explicit reference cannot rescue it
+      }
+    }
+  }
+
+  expect_failures = [
+    terraform_data.validate_pinned_remediation,
+  ]
+}
+
+# issue #58 (oracle P1): a parameterized effect that RESOLVES to Audit (via the
+# member parameter defaultValue) with roles must fail — set_assignment resolves
+# the parameter first, then filters to DeployIfNotExists/Modify.
+run "pinned_remediation_parameterized_effect_resolving_audit_fails" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_dine = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+        parameters = jsonencode({
+          effect = {
+            type          = "String"
+            defaultValue  = "Audit"
+            allowedValues = ["DeployIfNotExists", "Audit", "Disabled"]
+            metadata = {
+              displayName = "Effect"
+            }
+          }
+        })
+        policy_rule = jsonencode({
+          if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+          then = {
+            effect = "[parameters('effect')]"
+            details = {
+              type              = "Microsoft.Insights/diagnosticSettings"
+              roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+            }
+          }
+        })
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_dine"]
+      }
+    }
+    assignments = {
+      requested_remediation = {
+        initiative_key      = "baseline"
+        scope               = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate           = true
+        role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+        # parameterized effect resolves to Audit (defaultValue): never selected
+      }
+    }
+  }
+
+  expect_failures = [
+    terraform_data.validate_pinned_remediation,
+  ]
+}
+
+# issue #58: a parameterized effect resolving to DeployIfNotExists via an
+# explicit assignment parameter value must succeed with roles.
+run "pinned_remediation_parameterized_effect_assignment_override_succeeds" {
+  command = plan
+
+  variables {
+    definitions = {
+      pinned_dine = {
+        source        = "builtin"
+        definition_id = "/providers/Microsoft.Authorization/policyDefinitions/b7ddfbdc-e688-46bc-a468-2def594365a3"
+        version       = "3.1"
+        parameters = jsonencode({
+          effect = {
+            type          = "String"
+            defaultValue  = "Audit"
+            allowedValues = ["DeployIfNotExists", "Audit", "Disabled"]
+            metadata = {
+              displayName = "Effect"
+            }
+          }
+        })
+        policy_rule = jsonencode({
+          if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+          then = {
+            effect = "[parameters('effect')]"
+            details = {
+              type              = "Microsoft.Insights/diagnosticSettings"
+              roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+            }
+          }
+        })
+      }
+    }
+    initiatives = {
+      baseline = {
+        display_name           = "Baseline"
+        management_group_id    = "/providers/Microsoft.Management/managementGroups/test"
+        member_definition_keys = ["pinned_dine"]
+      }
+    }
+    assignments = {
+      requested_remediation = {
+        initiative_key      = "baseline"
+        scope               = "/subscriptions/00000000-0000-0000-0000-000000000000"
+        remediate           = true
+        role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+        # assignment parameter overrides the Audit default with a remediable effect
+        parameters = {
+          effect = "DeployIfNotExists"
+        }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(output.assignment_remediation_references["requested_remediation"]) >= 1
+    error_message = "A parameterized effect resolved to DeployIfNotExists via assignment parameters must produce remediation references (#58)"
+  }
+}
