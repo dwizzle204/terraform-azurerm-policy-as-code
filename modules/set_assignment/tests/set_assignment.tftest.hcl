@@ -143,6 +143,14 @@ run "assignment_effect_is_merged_into_parameters" {
   variables {
     assignment_effect     = "Audit"
     assignment_parameters = { retentionDays = 90 }
+    # issue #62: assignment parameters are values for DECLARED initiative
+    # parameters; no identity supplied, so member wiring is not required here
+    initiative = merge(var.initiative, {
+      parameters = jsonencode({
+        effect        = { type = "String", defaultValue = "AuditIfNotExists" }
+        retentionDays = { type = "Int", defaultValue = 30 }
+      })
+    })
   }
 
   assert {
@@ -750,3 +758,100 @@ run "role_assignment_permission_path_creates_remediation" {
 
 }
 
+
+# issue #62: assignment_effect without a declared initiative "effect" parameter
+# (schema-less pinned built-in) must fail fast before provider apply.
+run "assignment_effect_without_effect_param_fails" {
+  command = plan
+
+  variables {
+    assignment_effect   = "DeployIfNotExists"
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    # default initiative fixture declares parameters = {} — no effect parameter
+  }
+
+  expect_failures = [
+    terraform_data.validate_parameter_contract,
+  ]
+}
+
+# issue #62: assignment_effect with a declared parameter but NO member reference
+# wired to the initiative-level "effect" parameter cannot classify any member,
+# so remediation selection would silently disagree with the payload.
+run "assignment_effect_unwired_member_fails" {
+  command = plan
+
+  variables {
+    assignment_effect   = "DeployIfNotExists"
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    initiative = merge(var.initiative, {
+      parameters = jsonencode({
+        effect = { type = "String", defaultValue = "Audit" }
+      })
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/member_literal_effect"
+          reference_id         = "member_literal_effect"
+          # literal effect: NOT wired to the initiative-level effect parameter
+          parameter_values = jsonencode({ effect = { value = "DeployIfNotExists" } })
+        }
+      ]
+    })
+  }
+
+  expect_failures = [
+    terraform_data.validate_parameter_contract,
+  ]
+}
+
+# issue #62: unknown assignment_parameters keys must fail fast naming the key.
+run "assignment_parameters_unknown_key_fails" {
+  command = plan
+
+  variables {
+    assignment_parameters = { retentionDaysTypo = 90 }
+    initiative = merge(var.initiative, {
+      parameters = jsonencode({
+        retentionDays = { type = "Int", defaultValue = 30 }
+      })
+    })
+  }
+
+  expect_failures = [
+    terraform_data.validate_parameter_contract,
+  ]
+}
+
+# issue #62: declared effect parameter + wired member reference: assignment_effect
+# flows into the normalized payload AND drives remediation selection.
+run "assignment_effect_declared_param_payload_and_selection" {
+  command = plan
+
+  variables {
+    assignment_effect   = "Modify"
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    initiative = merge(var.initiative, {
+      parameters = jsonencode({
+        effect = { type = "String", defaultValue = "Audit" }
+      })
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/member_with_audit_default"
+          reference_id         = "member_with_audit_default"
+          parameter_values     = jsonencode({ effect = { value = "[parameters('effect')]" } })
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = try(jsondecode(output.parameters)["effect"].value, "") == "Modify"
+    error_message = "assignment_effect must be wired into the normalized payload when the initiative declares an 'effect' parameter (#62)"
+  }
+
+  assert {
+    condition     = contains(output.remediation_selected_references, "member_with_audit_default")
+    error_message = "assignment_effect with a declared, wired effect parameter must drive remediation selection (#62)"
+  }
+}

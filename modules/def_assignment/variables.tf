@@ -287,6 +287,17 @@ locals {
   # try to use policy definition roles if explicit roles are omitted
   role_definition_ids = var.skip_role_assignment == false && length(var.aad_group_remediation_object_ids) == 0 && try(values(local.identity_type)[0], "") == "SystemAssigned" ? try(coalescelist(var.role_definition_ids, lookup(try(jsondecode(var.definition.policy_rule).then.details, {}), "roleDefinitionIds", [])), []) : []
 
+  # issue #62: assignment_effect is an assignment-time value for a parameter
+  # DECLARED by the assigned definition (Azure assignment parameters are values
+  # for definition/initiative parameters). Injecting an "effect" assignment
+  # parameter when the definition declares no effect parameter is not a valid
+  # Azure payload and makes local remediation selection disagree with the real
+  # policy effect. Fail fast naming the offending key.
+  effect_parameter_declared = contains(keys(local.definition_parameters_decoded), "effect")
+  # issue #62: unknown assignment_parameters keys are values for parameters the
+  # definition does not declare; Azure rejects such payloads at apply.
+  unknown_assignment_parameter_keys = var.assignment_parameters != null ? setsubtract(keys(var.assignment_parameters), keys(local.definition_parameters_decoded)) : []
+
   # if creating role assignments also create a remediation task for policies with DeployIfNotExists and Modify effects
   # issue #1/#3: remediation is opt-in and effect-aware. Effective effect comes
   # from the assignment override or the policy rule; explicit remediation_reference_ids

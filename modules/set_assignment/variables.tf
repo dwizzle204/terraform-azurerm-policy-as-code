@@ -332,6 +332,22 @@ locals {
   # schema. Comparison is case-insensitive; unresolvable effects are treated as
   # NOT remediable but stay selectable via explicit remediation_reference_ids.
   initiative_parameters_decoded = try(jsondecode(var.initiative.parameters), var.initiative.parameters, {})
+  # issue #62: assignment_effect is an assignment-time value for the initiative's
+  # DECLARED "effect" parameter. It is only valid when (a) the initiative
+  # declares an "effect" parameter and (b) at least one member reference is
+  # actually wired to that initiative-level parameter (parameter_values
+  # interpolation "[parameters('effect')]"). Pinned built-ins whose historical
+  # schema is intentionally not hydrated declare no effect parameter, so callers
+  # must use explicit remediation_reference_ids for unresolved selection instead
+  # of pretending an assignment-level effect parameter exists.
+  initiative_effect_parameter_declared = contains(keys(local.initiative_parameters_decoded), "effect")
+  initiative_member_wired_to_effect = length([
+    for dr in try(var.initiative.policy_definition_reference, []) : dr
+    if try(jsondecode(coalesce(dr.parameter_values, "{}")).effect.value, "") == "[parameters('effect')]"
+  ]) > 0
+  # issue #62: unknown assignment_parameters keys are values for parameters the
+  # initiative does not declare; Azure rejects such payloads at apply.
+  unknown_assignment_parameter_keys = var.assignment_parameters != null ? setsubtract(keys(var.assignment_parameters), keys(local.initiative_parameters_decoded)) : []
   member_raw_effect = {
     for dr in local.member_definitions :
     dr.reference_id => try(jsondecode(coalesce(dr.parameter_values, "{}")).effect.value, "")

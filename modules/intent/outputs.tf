@@ -47,3 +47,8 @@ output "assignment_remediation_references" {
   description = "Map of logical assignment key -> member reference IDs selected for remediation"
   value       = { for k, a in module.assignments : k => a.remediation_selected_references }
 }
+
+output "assignment_parameters" {
+  description = "Map of logical assignment key -> normalized assignment parameters JSON (values for parameters declared by the assigned definition/initiative; issue #62)"
+  value       = { for k, a in module.assignments : k => a.parameters }
+}
