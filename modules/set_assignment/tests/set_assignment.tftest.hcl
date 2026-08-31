@@ -1237,3 +1237,86 @@ run "empty_selector_override_is_unconditional_global" {
     error_message = "An empty-selector override is an unconditional global override; every member's effect becomes Audit and no remediation tasks may be created (issue #65)"
   }
 }
+
+# issue #65 (oracle P1): a MIXED override (referenceId + resourceLocation) whose
+# location selector is provably disjoint from location_filters cannot apply to
+# ANY remediated resource (Azure ANDs all selectors). Its policyEffect value
+# must not replace the member effect even though the referenceId selector
+# matches — the waiver must exclude the override entirely, not merely clear the
+# ambiguity flag while still applying its value.
+run "mixed_disjoint_location_override_value_does_not_apply" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    location_filters    = ["northeurope"]
+    overrides = [
+      {
+        value = "Audit"
+        selectors = [
+          { kind = "policyDefinitionReferenceId", in = ["dine_member"] },
+          { kind = "resourceLocation", in = ["westeurope"] }
+        ]
+      }
+    ]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/dine_member"
+          reference_id         = "dine_member"
+          parameter_values     = jsonencode({ effect = { value = "DeployIfNotExists" } })
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 1 && output.remediation_tasks[0].policy_definition_reference_id == "dine_member"
+    error_message = "A mixed override whose resourceLocation selector is disjoint from location_filters must be excluded entirely; its value must not replace the member's remediable effect (issue #65)"
+  }
+}
+
+# issue #65 (oracle P1): assignment_effect must only reach members actually
+# wired to [parameters('effect')]. A member whose initiative reference carries
+# no effect mapping (literal rule effect, e.g. Audit) keeps its own effect and
+# is never rescued into remediation by an unrelated assignment-level effect.
+run "assignment_effect_does_not_rescue_unwired_literal_member" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    assignment_effect   = "DeployIfNotExists"
+    initiative = merge(var.initiative, {
+      parameters = jsonencode({
+        effect = {
+          type          = "String"
+          defaultValue  = "Audit"
+          allowedValues = ["DeployIfNotExists", "Audit", "Disabled"]
+          metadata = {
+            displayName = "Effect"
+          }
+        }
+      })
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/dine_member"
+          reference_id         = "dine_member"
+          parameter_values     = jsonencode({ effect = { value = "[parameters('effect')]" } })
+        },
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/audit_member"
+          reference_id         = "audit_member"
+          declared_effect      = "audit"
+          parameter_values     = null
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 1 && output.remediation_tasks[0].policy_definition_reference_id == "dine_member"
+    error_message = "assignment_effect must remediate only the wired member; an unwired literal Audit member keeps its own effect and must not be remediated (issues #62/#65)"
+  }
+}

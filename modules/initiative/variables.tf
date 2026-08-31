@@ -176,6 +176,15 @@ locals {
       # (e.g. "deployifnotexists"), an interpolation "[parameters('effect')]",
       # or "" when unresolved/unknown (external or schema-less pinned members).
       declared_effect = try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), "")
+      # issue #65: the declared effect parameter is only actually WIRED when the
+      # policy rule's effect references it ("[parameters('effect')]"). A member
+      # whose rule carries a KNOWN LITERAL effect (e.g. "DeployIfNotExists") must
+      # not get an effect entry in parameter_values: the initiative-level
+      # parameter would be declared but unused, and mapping it would let an
+      # assignment effect fabricate remediation eligibility the policy never
+      # has. Members with NO rule visibility (schema-less pinned built-ins) keep
+      # the wiring - an explicitly supplied effect schema there IS the contract.
+      effect_parameter_unwired = try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), "") != "" && !can(regex("parameters\\('effect'\\)", try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), "")))
     }
   }
 
@@ -189,11 +198,13 @@ locals {
       version              = v.azure_definition_version
       catalog_version      = v.catalog_version
       declared_effect      = v.declared_effect
-      parameter_values = length(v.parameters) > 0 ? jsonencode({
+      parameter_values = length([
+        for i in keys(v.parameters) : i if i != "effect" || !v.effect_parameter_unwired
+        ]) > 0 ? jsonencode({
         for i in keys(v.parameters) :
         i => {
           value = i == "effect" && var.merge_effects == false ? "[parameters('${i}_${v.reference}')]" : var.merge_parameters == false ? "[parameters('${i}_${v.reference}')]" : "[parameters('${i}')]"
-        }
+        } if i != "effect" || !v.effect_parameter_unwired
       }) : null
     }
   }

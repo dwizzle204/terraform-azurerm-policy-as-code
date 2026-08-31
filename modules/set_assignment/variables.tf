@@ -401,15 +401,19 @@ locals {
   override_matches_by_reference = {
     for dr in local.member_definitions :
     dr.reference_id => [
-      for o in var.overrides :
-      lower(o.value) if length(coalesce(o.selectors, [])) == 0 || length([
+      # Azure ANDs all selectors, so an override whose resourceLocation selector
+      # is provably disjoint from the task's location_filters cannot apply to
+      # ANY remediated resource — its policyEffect value must not replace the
+      # base/member effect even when its referenceId selector matches (#65).
+      for idx, o in var.overrides :
+      lower(o.value) if !local.override_disjoint_from_location[idx] && (length(coalesce(o.selectors, [])) == 0 || length([
         for s in coalesce(o.selectors, []) :
         s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId" && (
           (length(coalesce(s.in, [])) > 0 && contains(coalesce(s.in, []), dr.reference_id))
           || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) > 0 && !contains(coalesce(s.not_in, []), dr.reference_id))
           || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) == 0)
         )
-      ]) > 0
+      ]) > 0)
     ]
   }
   # issue #65: a resourceLocation selector makes an override resource-dependent
@@ -418,18 +422,26 @@ locals {
   # only when location_filters prove the override cannot touch the remediated
   # resources: location_filters is non-empty AND every resourceLocation selector
   # scopes by `in` AND none of those locations intersects location_filters.
-  override_is_location_dependent = {
-    for idx, o in var.overrides : idx => length([
-      for s in coalesce(o.selectors, []) :
-      s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId"
-      ]) > 0 && !(
-      length(var.location_filters) > 0 && length([
+  override_disjoint_from_location = {
+    for idx, o in var.overrides : idx => (
+      length([
+        for s in coalesce(o.selectors, []) :
+        s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId"
+      ]) > 0
+      && length(var.location_filters) > 0
+      && length([
         for s in coalesce(o.selectors, []) :
         s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId" && (
           length(coalesce(s.in, [])) == 0 || length(setintersection(coalesce(s.in, []), var.location_filters)) > 0
         )
       ]) == 0
     )
+  }
+  override_is_location_dependent = {
+    for idx, o in var.overrides : idx => length([
+      for s in coalesce(o.selectors, []) :
+      s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId"
+    ]) > 0 && !local.override_disjoint_from_location[idx]
   }
   # an override is location-ambiguous for a member when it selects that member
   # (via referenceId selectors, or globally via no/absent-referenceId selectors)

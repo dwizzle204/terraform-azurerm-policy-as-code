@@ -346,31 +346,45 @@ locals {
   # and none of those locations intersects location_filters). Explicit
   # remediation_reference_ids remain the opt-in path.
   definition_override_matches = [
-    for o in var.overrides :
-    lower(o.value) if length(coalesce(o.selectors, [])) == 0 || length([
+    # Azure ANDs all selectors, so an override whose resourceLocation selector
+    # is provably disjoint from the task's location_filters cannot apply to
+    # ANY remediated resource — its policyEffect value must not replace the
+    # definition's base effect (#65).
+    for idx, o in var.overrides :
+    lower(o.value) if !local.override_disjoint_from_location[idx] && (length(coalesce(o.selectors, [])) == 0 || length([
       for s in coalesce(o.selectors, []) :
       s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId" && (
         (length(coalesce(s.in, [])) > 0 && contains(coalesce(s.in, []), try(var.definition.name, "")))
         || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) > 0 && !contains(coalesce(s.not_in, []), try(var.definition.name, "")))
         || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) == 0)
       )
-    ]) > 0
+    ]) > 0)
   ]
   definition_override_effect = length(local.definition_override_matches) > 0 ? element(local.definition_override_matches, length(local.definition_override_matches) - 1) : null
-  # issue #65: any resourceLocation-containing override (pure or mixed) is
-  # resource-dependent and suppresses automatic remediation unless provable.
-  override_is_location_dependent = {
-    for idx, o in var.overrides : idx => length([
-      for s in coalesce(o.selectors, []) :
-      s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId"
-      ]) > 0 && !(
-      length(var.location_filters) > 0 && length([
+  # issue #65: provably non-applicable location-scoped override (used above to
+  # exclude the override from matching entirely).
+  override_disjoint_from_location = {
+    for idx, o in var.overrides : idx => (
+      length([
+        for s in coalesce(o.selectors, []) :
+        s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId"
+      ]) > 0
+      && length(var.location_filters) > 0
+      && length([
         for s in coalesce(o.selectors, []) :
         s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId" && (
           length(coalesce(s.in, [])) == 0 || length(setintersection(coalesce(s.in, []), var.location_filters)) > 0
         )
       ]) == 0
     )
+  }
+  # issue #65: any resourceLocation-containing override (pure or mixed) is
+  # resource-dependent and suppresses automatic remediation unless provable.
+  override_is_location_dependent = {
+    for idx, o in var.overrides : idx => length([
+      for s in coalesce(o.selectors, []) :
+      s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId"
+    ]) > 0 && !local.override_disjoint_from_location[idx]
   }
   definition_scope_ambiguous_override = length([
     for idx, o in var.overrides :
