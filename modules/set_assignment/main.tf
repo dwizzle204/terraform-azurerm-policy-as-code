@@ -15,11 +15,13 @@ resource "terraform_data" "validate_parameter_contract" {
     }
 
     precondition {
-      # wiring only matters when a remediation task is actually attempted:
-      # without an identity (or with remediation skipped) no member is ever
-      # selected, so an unwired effect parameter cannot silently no-op (#62)
-      condition     = var.assignment_effect == null || var.skip_remediation || length(local.identity_type) == 0 || local.initiative_member_wired_to_effect
-      error_message = "assignment_effect ('${(var.assignment_effect != null ? var.assignment_effect : "null")}') cannot be applied: no member reference of initiative '${try(var.initiative.name, "")}' is wired to the initiative-level 'effect' parameter ([parameters('effect')]). Under merge_effects = false members use per-reference effect parameters; supply those via assignment_parameters or omit assignment_effect (issue #62)."
+      # issue #65: per-remediated-member wiring check. assignment_effect only
+      # reaches members wired to [parameters('effect')]; it can never rescue an
+      # unwired member with no resolvable effect of its own that is not covered
+      # by an explicit remediation_reference_id — that member would silently
+      # produce zero remediation tasks.
+      condition     = length(local.assignment_effect_orphan_members) == 0
+      error_message = "assignment_effect ('${(var.assignment_effect != null ? var.assignment_effect : "null")}') cannot remediate member reference(s) [${join(", ", local.assignment_effect_orphan_members)}] of initiative '${try(var.initiative.name, "")}': they are not wired to the initiative-level 'effect' parameter ([parameters('effect')]) and resolve no effect of their own. Wire the member to the initiative effect parameter, supply its effect via per-reference assignment_parameters, or list it explicitly in remediation_reference_ids (issues #62/#65)."
     }
 
     precondition {

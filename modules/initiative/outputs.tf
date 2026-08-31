@@ -50,6 +50,7 @@ output "initiative" {
         version                  = i.version
         catalog_version          = i.catalog_version
         azure_definition_version = i.version
+        declared_effect          = i.declared_effect
       }
     ]
   }

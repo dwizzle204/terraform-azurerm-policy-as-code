@@ -5,7 +5,9 @@ Assignments can be scoped from overarching management groups right down to indiv
 
 ## Role Definitions & Assignments
 
-A role assignment and remediation task will be automatically created if any member definition contains a list of `roleDefinitionIds`. This can be omitted with `skip_role_assignment=true`, or to assign roles at a different scope to that of the policy assignment use: `role_assignment_scope`.
+A role assignment will be automatically created if any member definition contains a list of `roleDefinitionIds`. This can be omitted with `skip_role_assignment=true`, or to assign roles at a different scope to that of the policy assignment use: `role_assignment_scope`.
+
+A remediation task is **not** created automatically: remediation is opt-in via `remediate_effects` / `remediation_reference_ids` (see [Remediation lifecycle](#remediation-lifecycle-1-3)) and additionally requires a viable identity/RBAC path.
 
 For a cleaner solution, a list of `aad_group_remediation_object_ids` can be supplied for System Assigned Identity membership in favour of role assignments, assuming the appropriate RBAC controls already exist for that group. More info on role assignments can be found in the [main README](../../README.md#role-assignments)
 
@@ -15,6 +17,25 @@ The `assignment_effect` parameter is useful when an initiative contains multiple
 
 - Omit `assignment_effect` to use each definition's default effect stored in its policy parameters.
 - Specify effects individually by setting them in `assignment_parameters` for more granular control.
+
+### Per-member effective effect (issue #65)
+
+Azure passes initiative parameters to specific member definitions through each
+reference's `parameters` mapping; an initiative-level parameter never
+implicitly replaces every member's effect. This module therefore resolves the
+**effective effect per member** for remediation eligibility:
+
+| Source | Applies to |
+|--------|------------|
+| `policyEffect` override scoped by `policyDefinitionReferenceId` | the matching member reference (last matching override wins) |
+| `assignment_effect` | only members wired to `[parameters('effect')]` |
+| member `parameter_values.effect` (interpolation or literal) | that member |
+| member policy rule literal effect (`declared_effect`) | that member, when no effect parameter exists |
+| resourceLocation-scoped (or empty-selector) non-remediable overrides | effect treated as unresolved: automatic selection is suppressed; explicit `remediation_reference_ids` remain the opt-in path |
+
+Literal `DeployIfNotExists` / `Modify` policy rules are auto-detected for
+remediation even without an effect parameter; `Audit` / `Deny` / `Disabled`
+remain excluded.
 
 ## Examples
 
@@ -128,8 +149,8 @@ module org_mg_configure_az_monitor_linux_vm_initiative {
 
 | Name | Version |
 |------|---------|
-| terraform | >= 1.4 |
-| azurerm | >= 4.12 |
+| terraform | >= 1.11 |
+| azurerm | >= 4.35 |
 
 
 
@@ -209,7 +230,7 @@ Remediation is **opt-in and effect-aware**:
 | `remediation_reference_ids` | Explicit member reference ids to remediate when the resolved effect is unresolved (empty). Known non-remediable effects remain rejected even when explicitly listed; unknown ids fail the plan |
 | `skip_remediation` | Master switch; suppresses all remediation regardless of the above |
 
-Per-member effect resolution reads the member's `parameter_values.effect.value`.
+Per-member effect resolution reads the member's `parameter_values.effect.value`, falls back to the policy rule's literal effect (`declared_effect`), then applies `assignment_effect` only to members wired to `[parameters('effect')]`, and finally applies `policyEffect` overrides. See [Assignment Effects](#assignment-effects).
 
 ### Minimum privileges per deployment mode
 

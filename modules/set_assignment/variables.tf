@@ -16,6 +16,10 @@ variable "initiative" {
       reference_id         = string
       parameter_values     = optional(string)
       version              = optional(string)
+      # issue #65: normalized effect source from the policy rule (literal effect,
+      # "[parameters('effect')]", or "" when unresolved). Optional so externally
+      # managed initiative data without rule visibility remains accepted.
+      declared_effect = optional(string)
     })))
   })
 }
@@ -341,16 +345,31 @@ locals {
   # must use explicit remediation_reference_ids for unresolved selection instead
   # of pretending an assignment-level effect parameter exists.
   initiative_effect_parameter_declared = contains(keys(local.initiative_parameters_decoded), "effect")
-  initiative_member_wired_to_effect = length([
-    for dr in try(var.initiative.policy_definition_reference, []) : dr
-    if try(jsondecode(coalesce(dr.parameter_values, "{}")).effect.value, "") == "[parameters('effect')]"
-  ]) > 0
+  # issue #65: per-member wiring — assignment_effect may only override a member
+  # whose reference is actually wired to the initiative-level effect parameter
+  # (parameter_values interpolation "[parameters('effect')]"). Azure passes
+  # initiative parameters to specific member parameters through each reference's
+  # parameters mapping; an initiative parameter never implicitly replaces every
+  # member's effect.
+  member_wired_to_initiative_effect = {
+    for dr in local.member_definitions :
+    dr.reference_id => try(jsondecode(coalesce(dr.parameter_values, "{}")).effect.value, "") == "[parameters('effect')]"
+  }
   # issue #62: unknown assignment_parameters keys are values for parameters the
   # initiative does not declare; Azure rejects such payloads at apply.
   unknown_assignment_parameter_keys = var.assignment_parameters != null ? setsubtract(keys(var.assignment_parameters), keys(local.initiative_parameters_decoded)) : []
   member_raw_effect = {
     for dr in local.member_definitions :
     dr.reference_id => try(jsondecode(coalesce(dr.parameter_values, "{}")).effect.value, "")
+  }
+  # issue #65: normalized effect source from the policy rule itself, exposed by
+  # the initiative module on each reference. This makes literal
+  # DeployIfNotExists/Modify rules (which declare no effect parameter, so their
+  # reference carries no parameter_values effect entry) visible to remediation
+  # auto-detection instead of resolving to an unknown effect.
+  member_declared_effect = {
+    for dr in local.member_definitions :
+    dr.reference_id => try(lower(dr.declared_effect), "")
   }
   member_effect = {
     for dr in local.member_definitions :
@@ -361,14 +380,71 @@ locals {
         local.initiative_parameters_decoded[regex("^\\[parameters\\('(.+?)'\\)\\]$", local.member_raw_effect[dr.reference_id])[0]].defaultValue,
         ""
       )) :
-      local.member_raw_effect[dr.reference_id]
+      local.member_raw_effect[dr.reference_id] != "" ? local.member_raw_effect[dr.reference_id] :
+      local.member_declared_effect[dr.reference_id]
     )
   }
-  # assignment_effect overrides per-member effects for remediation eligibility
+  # issue #65: honor policyEffect assignment overrides. An override REPLACES the
+  # effective effect of the references it selects:
+  #  - overrides scoped by policyDefinitionReferenceId (in/not_in/absent
+  #    selectors) apply to the matching members; the last matching override wins
+  #  - overrides carrying only resourceLocation selectors (or no selectors at
+  #    all, which Azure applies to every reference) make the effective effect
+  #    resource/scope-dependent: treated conservatively as unresolved so
+  #    automatic selection is suppressed and explicit
+  #    remediation_reference_ids remain the opt-in path
+  override_matches_by_reference = {
+    for dr in local.member_definitions :
+    dr.reference_id => [
+      for o in var.overrides :
+      lower(o.value) if length(coalesce(o.selectors, [])) == 0 || length([
+        for s in coalesce(o.selectors, []) :
+        s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId" && (
+          (length(coalesce(s.in, [])) > 0 && contains(coalesce(s.in, []), dr.reference_id))
+          || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) > 0 && !contains(coalesce(s.not_in, []), dr.reference_id))
+          || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) == 0)
+        )
+      ]) > 0
+    ]
+  }
+  override_non_reference_selector_values = distinct(flatten([
+    for o in var.overrides :
+    [lower(o.value)] if length(coalesce(o.selectors, [])) > 0 && length([
+      for s in coalesce(o.selectors, []) :
+      s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId"
+    ]) == 0
+  ]))
+  # true when a location/wildcard override could change a member's effect to a
+  # non-remediable value depending on the remediated resource
+  override_scope_ambiguous = length(local.override_non_reference_selector_values) > 0 && (
+    contains(local.override_non_reference_selector_values, "audit")
+    || contains(local.override_non_reference_selector_values, "disabled")
+    || contains(local.override_non_reference_selector_values, "auditifnotexists")
+    || contains(local.override_non_reference_selector_values, "deny")
+  )
+  # issue #62/#65: assignment_effect reaches ONLY wired members; unwired members
+  # keep their own resolved effect. Overrides take precedence over everything:
+  # Azure applies the override regardless of parameter wiring.
   effective_member_effect = {
     for dr in local.member_definitions :
-    dr.reference_id => var.assignment_effect != null ? lower(var.assignment_effect) : local.member_effect[dr.reference_id]
+    dr.reference_id => (
+      local.override_scope_ambiguous ? "" :
+      length(local.override_matches_by_reference[dr.reference_id]) > 0 ? element(local.override_matches_by_reference[dr.reference_id], length(local.override_matches_by_reference[dr.reference_id]) - 1) :
+      var.assignment_effect != null && local.member_wired_to_initiative_effect[dr.reference_id] ? lower(var.assignment_effect) :
+      local.member_effect[dr.reference_id]
+    )
   }
+  # issue #65: per-remediated-member fail-fast. assignment_effect cannot rescue
+  # a member that is neither wired to the initiative effect parameter, nor
+  # covered by an explicit remediation_reference_id, nor resolvable on its own —
+  # such a member would silently produce zero remediation tasks.
+  assignment_effect_orphan_members = [
+    for dr in local.member_definitions : dr.reference_id
+    if var.assignment_effect != null
+    && !local.member_wired_to_initiative_effect[dr.reference_id]
+    && local.member_effect[dr.reference_id] == ""
+    && !contains(var.remediation_reference_ids, dr.reference_id)
+  ]
   unknown_remediation_references = (
     length(var.remediation_reference_ids) > 0 && length(setsubtract(var.remediation_reference_ids, [for dr in local.member_definitions : dr.reference_id])) > 0 ?
     file("[ERROR] set_assignment: remediation_reference_ids [${join(", ", setsubtract(var.remediation_reference_ids, [for dr in local.member_definitions : dr.reference_id]))}] are not valid member references. Valid ids: [${join(", ", [for dr in local.member_definitions : dr.reference_id])}].") :

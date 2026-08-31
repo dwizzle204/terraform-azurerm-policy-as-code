@@ -368,3 +368,120 @@ run "unversioned_builtin_version_null" {
     error_message = "Unversioned built-ins must emit no definitionVersion selector"
   }
 }
+
+# issue #65: literal policy_rule effects must be carried on the reference as a
+# normalized declared_effect so assignments can auto-detect remediation
+# eligibility without an effect parameter.
+run "literal_dine_effect_exposed_as_declared_effect" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyDefinitions/literal_dine"
+        name         = "literal_dine"
+        display_name = "Literal DINE"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring" })
+        parameters   = jsonencode({})
+        policy_rule = jsonencode({
+          if   = { field = "type", equals = "Microsoft.Compute/virtualMachines" }
+          then = { effect = "DeployIfNotExists", details = { type = "x" } }
+        })
+      }
+    ]
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].declared_effect == "deployifnotexists"
+    error_message = "A literal DeployIfNotExists policy_rule effect must be exposed as declared_effect on the reference (issue #65)"
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].parameter_values == null
+    error_message = "A member with no effect parameter must emit no parameter_values effect entry (issue #65)"
+  }
+}
+
+run "literal_modify_effect_exposed_as_declared_effect" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyDefinitions/literal_modify"
+        name         = "literal_modify"
+        display_name = "Literal Modify"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring" })
+        parameters   = jsonencode({})
+        policy_rule = jsonencode({
+          if   = { field = "type", equals = "Microsoft.Compute/virtualMachines" }
+          then = { effect = "Modify" }
+        })
+      }
+    ]
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].declared_effect == "modify"
+    error_message = "A literal Modify policy_rule effect must be exposed as declared_effect (issue #65)"
+  }
+}
+
+run "parameterized_effect_exposed_as_declared_effect" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyDefinitions/parameterized_effect"
+        name         = "parameterized_effect"
+        display_name = "Parameterized Effect"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring" })
+        parameters   = jsonencode({ effect = { type = "String", defaultValue = "DeployIfNotExists" } })
+        policy_rule = jsonencode({
+          if   = { field = "type", equals = "Microsoft.Compute/virtualMachines" }
+          then = { effect = "[parameters('effect')]", details = { type = "x" } }
+        })
+      }
+    ]
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].declared_effect == "[parameters('effect')]"
+    error_message = "A parameterized policy_rule effect must be exposed as the [parameters('effect')] source (issue #65)"
+  }
+
+  assert {
+    condition     = jsondecode(output.initiative.policy_definition_reference[0].parameter_values).effect.value == "[parameters('effect')]"
+    error_message = "Parameterized members must keep their parameter_values wiring (issue #65)"
+  }
+}
+
+run "literal_audit_effect_exposed_as_declared_effect" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyDefinitions/literal_audit"
+        name         = "literal_audit"
+        display_name = "Literal Audit"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring" })
+        parameters   = jsonencode({})
+        policy_rule = jsonencode({
+          if   = { field = "type", equals = "Microsoft.Compute/virtualMachines" }
+          then = { effect = "Audit" }
+        })
+      }
+    ]
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].declared_effect == "audit"
+    error_message = "A literal Audit policy_rule effect must be exposed as declared_effect so it stays excluded from remediation (issue #65)"
+  }
+}

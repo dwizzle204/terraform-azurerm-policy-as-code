@@ -775,14 +775,16 @@ run "assignment_effect_without_effect_param_fails" {
   ]
 }
 
-# issue #62: assignment_effect with a declared parameter but NO member reference
-# wired to the initiative-level "effect" parameter cannot classify any member,
-# so remediation selection would silently disagree with the payload.
-run "assignment_effect_unwired_member_fails" {
+# issue #65: assignment_effect only reaches members wired to
+# [parameters('effect')]. An unwired member with a resolvable literal effect of
+# its own keeps that effect — here assignment_effect is inert and the literal
+# DINE member is still selected for remediation.
+run "assignment_effect_unwired_member_classified_by_own_effect" {
   command = plan
 
   variables {
     assignment_effect   = "DeployIfNotExists"
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
     role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
     initiative = merge(var.initiative, {
       parameters = jsonencode({
@@ -799,9 +801,10 @@ run "assignment_effect_unwired_member_fails" {
     })
   }
 
-  expect_failures = [
-    terraform_data.validate_parameter_contract,
-  ]
+  assert {
+    condition     = length(output.remediation_tasks) == 1 && output.remediation_tasks[0].policy_definition_reference_id == "member_literal_effect"
+    error_message = "An unwired member with its own literal DINE effect must keep that effect and be remediated; assignment_effect cannot reclassify it (issue #65)"
+  }
 }
 
 # issue #62: unknown assignment_parameters keys must fail fast naming the key.
@@ -853,5 +856,247 @@ run "assignment_effect_declared_param_payload_and_selection" {
   assert {
     condition     = contains(output.remediation_selected_references, "member_with_audit_default")
     error_message = "assignment_effect with a declared, wired effect parameter must drive remediation selection (#62)"
+  }
+}
+
+# ---- issue #65: per-member effective effect ----
+
+# assignment_effect must only override members wired to [parameters('effect')].
+# A mixed initiative with one wired DINE member and one unwired literal Audit
+# member must not have the unwired member's effect replaced.
+run "assignment_effect_applies_only_to_wired_members" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    assignment_effect   = "DeployIfNotExists"
+    initiative = merge(var.initiative, {
+      parameters = { effect = { type = "String", defaultValue = "Audit" } }
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/wired_dine"
+          reference_id         = "wired_dine"
+          parameter_values     = jsonencode({ effect = { value = "[parameters('effect')]" } })
+        },
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/unwired_audit"
+          reference_id         = "unwired_audit"
+          parameter_values     = jsonencode({ effect = { value = "Audit" } })
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 1 && output.remediation_tasks[0].policy_definition_reference_id == "wired_dine"
+    error_message = "assignment_effect must only reach the member wired to [parameters('effect')]; the unwired Audit member must stay Audit and receive no task (issue #65)"
+  }
+}
+
+# the inverse case: an unrelated assignment_effect=Audit must not suppress an
+# unwired literal DINE member — unwired members keep their own effect.
+run "unwired_literal_dine_not_suppressed_by_assignment_effect" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    assignment_effect   = "Audit"
+    initiative = merge(var.initiative, {
+      parameters = { effect = { type = "String", defaultValue = "Audit" } }
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/literal_dine"
+          reference_id         = "literal_dine"
+          declared_effect      = "deployifnotexists"
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 1 && output.remediation_tasks[0].policy_definition_reference_id == "literal_dine"
+    error_message = "An unwired literal DINE member must keep its own effect; assignment_effect=Audit must not suppress it (issue #65)"
+  }
+}
+
+# literal DINE/Modify effects with no effect parameter must be auto-detected
+# for remediation via the reference's declared_effect (no assignment_effect,
+# no explicit remediation_reference_ids).
+run "literal_dine_member_auto_detected_for_remediation" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/literal_dine"
+          reference_id         = "literal_dine"
+          declared_effect      = "deployifnotexists"
+        },
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/literal_audit"
+          reference_id         = "literal_audit"
+          declared_effect      = "audit"
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 1 && output.remediation_tasks[0].policy_definition_reference_id == "literal_dine"
+    error_message = "A literal DINE member with no effect parameter must be auto-selected for remediation while literal Audit stays excluded (issue #65)"
+  }
+}
+
+run "literal_modify_member_auto_detected_for_remediation" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/literal_modify"
+          reference_id         = "literal_modify"
+          declared_effect      = "modify"
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 1 && output.remediation_tasks[0].policy_definition_reference_id == "literal_modify"
+    error_message = "A literal Modify member with no effect parameter must be auto-selected for remediation (issue #65)"
+  }
+}
+
+# an unwired member with no resolvable effect of its own cannot be rescued by
+# assignment_effect: the plan must fail naming the orphan member.
+run "assignment_effect_orphan_member_fails_fast" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    assignment_effect   = "DeployIfNotExists"
+    initiative = merge(var.initiative, {
+      parameters = { effect = { type = "String", defaultValue = "Audit" } }
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/orphan_member"
+          reference_id         = "orphan_member"
+          declared_effect      = ""
+        }
+      ]
+    })
+  }
+
+  expect_failures = [
+    terraform_data.validate_parameter_contract,
+  ]
+}
+
+# ---- issue #65: policyEffect overrides ----
+
+# a reference-scoped override to Audit suppresses remediation for exactly the
+# selected member; unselected DINE members are unaffected.
+run "reference_scoped_override_suppresses_selected_member" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    overrides = [
+      {
+        value     = "Audit"
+        selectors = [{ kind = "policyDefinitionReferenceId", in = ["dine_member"] }]
+      }
+    ]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/dine_member"
+          reference_id         = "dine_member"
+          parameter_values     = jsonencode({ effect = { value = "DeployIfNotExists" } })
+        },
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/dine_member_two"
+          reference_id         = "dine_member_two"
+          parameter_values     = jsonencode({ effect = { value = "DeployIfNotExists" } })
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 1 && output.remediation_tasks[0].policy_definition_reference_id == "dine_member_two"
+    error_message = "A DINE member overridden to Audit must not receive a remediation task; unaffected members keep theirs (issue #65)"
+  }
+}
+
+# a location-scoped non-remediable override makes the effective effect
+# resource-dependent: automatic selection is suppressed entirely.
+run "location_scoped_override_suppresses_automatic_selection" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    overrides = [
+      {
+        value     = "Audit"
+        selectors = [{ kind = "resourceLocation", in = ["westeurope"] }]
+      }
+    ]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/dine_member"
+          reference_id         = "dine_member"
+          parameter_values     = jsonencode({ effect = { value = "DeployIfNotExists" } })
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 0
+    error_message = "A location-scoped non-remediable override makes the effect resource-dependent; automatic remediation must be suppressed (issue #65)"
+  }
+}
+
+# the conservative suppression is overridable via explicit remediation_reference_ids
+run "location_scoped_override_explicit_reference_still_selects" {
+  command = plan
+
+  variables {
+    remediate_effects         = ["DeployIfNotExists", "Modify"]
+    role_definition_ids       = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    remediation_reference_ids = ["dine_member"]
+    overrides = [
+      {
+        value     = "Audit"
+        selectors = [{ kind = "resourceLocation", in = ["westeurope"] }]
+      }
+    ]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/dine_member"
+          reference_id         = "dine_member"
+          parameter_values     = jsonencode({ effect = { value = "DeployIfNotExists" } })
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 1 && output.remediation_tasks[0].policy_definition_reference_id == "dine_member"
+    error_message = "Explicit remediation_reference_ids remain the opt-in path when override ambiguity suppresses automatic selection (issue #65)"
   }
 }
