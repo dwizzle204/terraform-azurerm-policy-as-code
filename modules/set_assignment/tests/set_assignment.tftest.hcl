@@ -1320,3 +1320,113 @@ run "assignment_effect_does_not_rescue_unwired_literal_member" {
     error_message = "assignment_effect must remediate only the wired member; an unwired literal Audit member keeps its own effect and must not be remediated (issues #62/#65)"
   }
 }
+
+# ---- issue #65 (Codex P1): orphan validation must not reject valid opt-outs ----
+
+# remediation is opt-in: with remediate_effects = [] no task is expected, so an
+# unresolved unwired member next to a wired one must not fail the assignment.
+run "assignment_effect_orphan_not_flagged_when_remediation_opt_out" {
+  command = plan
+
+  variables {
+    remediate_effects   = []
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    assignment_effect   = "DeployIfNotExists"
+    initiative = merge(var.initiative, {
+      parameters = { effect = { type = "String", defaultValue = "Audit" } }
+      policy_definition_reference = [
+        {
+          policy_definition_id   = "/providers/Microsoft.Authorization/policyDefinitions/wired_member"
+          reference_id           = "wired_member"
+          declared_effect        = ""
+          effect_parameter_wired = true
+          parameter_values       = jsonencode({ effect = { value = "[parameters('effect')]" } })
+        },
+        {
+          policy_definition_id   = "/providers/Microsoft.Authorization/policyDefinitions/orphan_member"
+          reference_id           = "orphan_member"
+          declared_effect        = ""
+          effect_parameter_wired = false
+          parameter_values       = null
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_selected_references) == 0
+    error_message = "With remediate_effects = [] no remediation tasks are expected, so the assignment must plan cleanly (issue #65 Codex P1)"
+  }
+}
+
+# a policyEffect override that RESOLVES the previously unresolved member means
+# assignment_effect needs no rescue: the guard must not fire.
+run "assignment_effect_orphan_not_flagged_when_override_resolves" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    assignment_effect   = "DeployIfNotExists"
+    overrides = [
+      {
+        value     = "DeployIfNotExists"
+        selectors = [{ kind = "policyDefinitionReferenceId", in = ["orphan_member"] }]
+      }
+    ]
+    initiative = merge(var.initiative, {
+      parameters = { effect = { type = "String", defaultValue = "Audit" } }
+      policy_definition_reference = [
+        {
+          policy_definition_id   = "/providers/Microsoft.Authorization/policyDefinitions/wired_member"
+          reference_id           = "wired_member"
+          declared_effect        = ""
+          effect_parameter_wired = true
+          parameter_values       = jsonencode({ effect = { value = "[parameters('effect')]" } })
+        },
+        {
+          policy_definition_id   = "/providers/Microsoft.Authorization/policyDefinitions/orphan_member"
+          reference_id           = "orphan_member"
+          declared_effect        = ""
+          effect_parameter_wired = false
+          parameter_values       = null
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = contains(output.remediation_selected_references, "orphan_member")
+    error_message = "An override-resolved member must be selected for remediation without triggering the orphan fail-fast (issue #65 Codex P1)"
+  }
+}
+
+# a required-but-unconsumed effect mapping (effect_parameter_wired=false with a
+# parameter_values.effect entry) must NOT let assignment_effect fabricate
+# remediation eligibility for a literal Audit rule.
+run "assignment_effect_does_not_rescue_required_mapping_unwired_member" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    assignment_effect   = "DeployIfNotExists"
+    initiative = merge(var.initiative, {
+      parameters = { effect = { type = "String" } }
+      policy_definition_reference = [
+        {
+          policy_definition_id   = "/providers/Microsoft.Authorization/policyDefinitions/lit_audit_member"
+          reference_id           = "lit_audit_member"
+          declared_effect        = "audit"
+          effect_parameter_wired = false
+          parameter_values       = jsonencode({ effect = { value = "[parameters('effect')]" } })
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_selected_references) == 0
+    error_message = "A preserved required effect mapping must not reclassify a literal Audit member as remediable via assignment_effect (issue #65 Codex P1)"
+  }
+}

@@ -579,3 +579,60 @@ run "parameterized_rule_effect_remains_wired" {
     error_message = "A parameterized rule effect must remain wired via parameter_values.effect (issue #65)"
   }
 }
+
+# issue #65 (Codex P1): a member that DECLARES a REQUIRED effect parameter (no
+# defaultValue) but whose rule effect is a literal must KEEP its
+# parameter_values.effect mapping — Azure requires every non-defaulted
+# referenced-policy parameter to receive a value at initiative construction,
+# whether or not the rule consumes it. The mapping is contract satisfaction
+# only: effect_parameter_wired stays false so an assignment effect cannot
+# fabricate remediation eligibility.
+run "required_effect_parameter_mapping_preserved_for_literal_rule" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyDefinitions/member_req"
+        name         = "member_req"
+        display_name = "Member Req"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring" })
+        parameters = jsonencode({
+          effect = {
+            type          = "String"
+            allowedValues = ["DeployIfNotExists", "Audit", "Disabled"]
+            metadata = {
+              displayName = "Effect"
+            }
+          }
+        })
+        policy_rule = jsonencode({
+          if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+          then = {
+            effect = "DeployIfNotExists"
+            details = {
+              type              = "Microsoft.Insights/diagnosticSettings"
+              roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+            }
+          }
+        })
+      }
+    ]
+  }
+
+  assert {
+    condition     = try(jsondecode(output.initiative.policy_definition_reference[0].parameter_values).effect.value, "") == "[parameters('effect')]"
+    error_message = "A required (no defaultValue) effect parameter must keep its parameter_values.effect mapping so Azure accepts the initiative (issue #65 Codex P1)"
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].effect_parameter_wired == false
+    error_message = "A literal rule effect must keep effect_parameter_wired=false even when the required mapping is preserved (issue #65 Codex P1)"
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].declared_effect == "deployifnotexists"
+    error_message = "The literal rule effect must remain the declared_effect used for remediation classification (issue #65)"
+  }
+}

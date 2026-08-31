@@ -20,6 +20,13 @@ variable "initiative" {
       # "[parameters('effect')]", or "" when unresolved). Optional so externally
       # managed initiative data without rule visibility remains accepted.
       declared_effect = optional(string)
+      # issue #65 (Codex P1): authoritative signal that the member's policy rule
+      # actually consumes the initiative effect parameter. A member can carry a
+      # parameter_values.effect mapping purely to satisfy a REQUIRED (no
+      # defaultValue) parameter contract while its rule effect stays literal;
+      # such a mapping must not make assignment_effect eligible. Optional with a
+      # parameter_values-based fallback for external initiative data.
+      effect_parameter_wired = optional(bool)
     })))
   })
 }
@@ -353,7 +360,15 @@ locals {
   # member's effect.
   member_wired_to_initiative_effect = {
     for dr in local.member_definitions :
-    dr.reference_id => try(jsondecode(coalesce(dr.parameter_values, "{}")).effect.value, "") == "[parameters('effect')]"
+    dr.reference_id => (
+      # issue #65 (Codex P1): the initiative module marks wiring explicitly
+      # (rule effect references the parameter). Fall back to the historical
+      # parameter_values inference only for external initiative data that does
+      # not carry the flag — a required-but-unconsumed effect mapping from that
+      # path cannot be distinguished there.
+      dr.effect_parameter_wired != null ? dr.effect_parameter_wired :
+      try(jsondecode(coalesce(dr.parameter_values, "{}")).effect.value, "") == "[parameters('effect')]"
+    )
   }
   # issue #62: unknown assignment_parameters keys are values for parameters the
   # initiative does not declare; Azure rejects such payloads at apply.
@@ -374,6 +389,11 @@ locals {
   member_effect = {
     for dr in local.member_definitions :
     dr.reference_id => lower(
+      # issue #65 (Codex P1): when the initiative explicitly marks the member
+      # unwired, the rule's literal declared_effect is authoritative — any
+      # parameter_values.effect entry is contract satisfaction for a required
+      # parameter, not an effect the rule actually consumes.
+      dr.effect_parameter_wired == false ? local.member_declared_effect[dr.reference_id] :
       can(regex("^\\[parameters\\('(.+?)'\\)\\]$", local.member_raw_effect[dr.reference_id])) ?
       tostring(try(
         var.assignment_parameters[regex("^\\[parameters\\('(.+?)'\\)\\]$", local.member_raw_effect[dr.reference_id])[0]],
@@ -485,9 +505,21 @@ locals {
   # a member that is neither wired to the initiative effect parameter, nor
   # covered by an explicit remediation_reference_id, nor resolvable on its own —
   # such a member would silently produce zero remediation tasks.
+  # issue #65 (Codex P1): the fail-fast only applies when automatic remediation
+  # selection is actually active for the member. Remediation is opt-in, so an
+  # unresolved unwired member with remediate_effects = [] (or with only
+  # non-remediable remediate_effects values) is a valid opt-out, not an error;
+  # and a policyEffect override that RESOLVES the member (post-override
+  # effective effect known) needs no rescue either.
+  remediation_auto_selection_active = length([
+    for e in var.remediate_effects : e
+    if contains(["deployifnotexists", "modify"], lower(e))
+  ]) > 0
   assignment_effect_orphan_members = [
     for dr in local.member_definitions : dr.reference_id
     if var.assignment_effect != null
+    && local.remediation_auto_selection_active
+    && local.effective_member_effect[dr.reference_id] == ""
     && !local.member_wired_to_initiative_effect[dr.reference_id]
     && local.member_effect[dr.reference_id] == ""
     && !contains(var.remediation_reference_ids, dr.reference_id)

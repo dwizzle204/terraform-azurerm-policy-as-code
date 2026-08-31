@@ -185,6 +185,16 @@ locals {
       # has. Members with NO rule visibility (schema-less pinned built-ins) keep
       # the wiring - an explicitly supplied effect schema there IS the contract.
       effect_parameter_unwired = try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), "") != "" && !can(regex("parameters\\('effect'\\)", try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), "")))
+      # issue #65 (Codex P1): a member that DECLARES a required effect parameter
+      # (no defaultValue) must keep its parameter_values.effect mapping even when
+      # the rule effect is a literal: Azure requires every non-defaulted
+      # referenced-policy parameter to receive a value at initiative
+      # construction, regardless of whether the rule consumes it. Wiring
+      # eligibility for assignment-effect classification is tracked separately
+      # via effect_parameter_wired so the mapping never fabricates remediation
+      # eligibility the policy rule does not have.
+      effect_parameter_required = contains(keys(try(jsondecode(d.parameters), {})), "effect") && !contains(keys(try(jsondecode(d.parameters), {}).effect), "defaultValue")
+      effect_parameter_wired    = !(try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), "") != "" && !can(regex("parameters\\('effect'\\)", try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), ""))))
     }
   }
 
@@ -193,18 +203,19 @@ locals {
   policy_definition_reference = {
     for k, v in local.member_properties :
     k => {
-      policy_definition_id = v.id
-      reference_id         = var.camel_case_references == false ? v.reference : replace(title(replace(v.reference, "/-|_|\\s/", " ")), "/\\s/", "")
-      version              = v.azure_definition_version
-      catalog_version      = v.catalog_version
-      declared_effect      = v.declared_effect
+      policy_definition_id   = v.id
+      reference_id           = var.camel_case_references == false ? v.reference : replace(title(replace(v.reference, "/-|_|\\s/", " ")), "/\\s/", "")
+      version                = v.azure_definition_version
+      catalog_version        = v.catalog_version
+      declared_effect        = v.declared_effect
+      effect_parameter_wired = v.effect_parameter_wired
       parameter_values = length([
-        for i in keys(v.parameters) : i if i != "effect" || !v.effect_parameter_unwired
+        for i in keys(v.parameters) : i if i != "effect" || !v.effect_parameter_unwired || v.effect_parameter_required
         ]) > 0 ? jsonencode({
         for i in keys(v.parameters) :
         i => {
           value = i == "effect" && var.merge_effects == false ? "[parameters('${i}_${v.reference}')]" : var.merge_parameters == false ? "[parameters('${i}_${v.reference}')]" : "[parameters('${i}')]"
-        } if i != "effect" || !v.effect_parameter_unwired
+        } if i != "effect" || !v.effect_parameter_unwired || v.effect_parameter_required
       }) : null
     }
   }
