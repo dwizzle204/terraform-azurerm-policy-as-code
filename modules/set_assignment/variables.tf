@@ -518,8 +518,8 @@ locals {
   assignment_effect_orphan_members = [
     for dr in local.member_definitions : dr.reference_id
     if var.assignment_effect != null
-    && contains(["deployifnotexists", "modify"], lower(coalesce(var.assignment_effect, "")))
-    && contains([for e in var.remediate_effects : lower(e)], lower(coalesce(var.assignment_effect, "")))
+    && contains(["deployifnotexists", "modify"], try(lower(var.assignment_effect), ""))
+    && contains([for e in var.remediate_effects : lower(e)], try(lower(var.assignment_effect), ""))
     && local.remediation_auto_selection_active
     && local.effective_member_effect[dr.reference_id] == ""
     && !local.member_wired_to_initiative_effect[dr.reference_id]
