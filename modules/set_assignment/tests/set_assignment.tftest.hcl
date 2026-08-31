@@ -1039,6 +1039,40 @@ run "reference_scoped_override_suppresses_selected_member" {
   }
 }
 
+# Multiple reference selectors are ANDed by Azure. A contradictory in/not_in
+# pair must not apply its policyEffect override to the member.
+run "contradictory_reference_selectors_do_not_match" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    overrides = [
+      {
+        value = "Audit"
+        selectors = [
+          { kind = "policyDefinitionReferenceId", in = ["dine_member"] },
+          { kind = "policyDefinitionReferenceId", not_in = ["dine_member"] },
+        ]
+      }
+    ]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/dine_member"
+          reference_id         = "dine_member"
+          parameter_values     = jsonencode({ effect = { value = "DeployIfNotExists" } })
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 1
+    error_message = "Contradictory reference selectors must not suppress the DINE member (issue #65)"
+  }
+}
+
 # a location-scoped non-remediable override makes the effective effect
 # resource-dependent: automatic selection is suppressed entirely.
 run "location_scoped_override_suppresses_automatic_selection" {
@@ -1356,6 +1390,35 @@ run "assignment_effect_orphan_not_flagged_when_remediation_opt_out" {
   assert {
     condition     = length(output.remediation_selected_references) == 0
     error_message = "With remediate_effects = [] no remediation tasks are expected, so the assignment must plan cleanly (issue #65 Codex P1)"
+  }
+}
+
+# An assignment effect that is not among requested remediation effects cannot
+# select a task, so unresolved members must not trigger orphan validation.
+run "assignment_effect_orphan_not_flagged_when_effect_not_requested" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["Modify"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    assignment_effect   = "Audit"
+    initiative = merge(var.initiative, {
+      parameters = { effect = { type = "String", defaultValue = "Audit" } }
+      policy_definition_reference = [
+        {
+          policy_definition_id   = "/providers/Microsoft.Authorization/policyDefinitions/orphan_member"
+          reference_id           = "orphan_member"
+          declared_effect        = ""
+          effect_parameter_wired = false
+          parameter_values       = null
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_selected_references) == 0
+    error_message = "An Audit assignment must not activate orphan validation when only Modify is requested (issue #65)"
   }
 }
 

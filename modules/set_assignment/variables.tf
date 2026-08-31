@@ -426,14 +426,14 @@ locals {
       # ANY remediated resource — its policyEffect value must not replace the
       # base/member effect even when its referenceId selector matches (#65).
       for idx, o in var.overrides :
-      lower(o.value) if !local.override_disjoint_from_location[idx] && (length(coalesce(o.selectors, [])) == 0 || length([
+      lower(o.value) if !local.override_disjoint_from_location[idx] && (length(coalesce(o.selectors, [])) == 0 || alltrue([
         for s in coalesce(o.selectors, []) :
-        s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId" && (
+        coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId" || (
           (length(coalesce(s.in, [])) > 0 && contains(coalesce(s.in, []), dr.reference_id))
           || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) > 0 && !contains(coalesce(s.not_in, []), dr.reference_id))
           || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) == 0)
         )
-      ]) > 0)
+      ]))
     ]
   }
   # issue #65: a resourceLocation selector makes an override resource-dependent
@@ -518,6 +518,8 @@ locals {
   assignment_effect_orphan_members = [
     for dr in local.member_definitions : dr.reference_id
     if var.assignment_effect != null
+    && contains(["deployifnotexists", "modify"], lower(var.assignment_effect))
+    && contains([for e in var.remediate_effects : lower(e)], lower(var.assignment_effect))
     && local.remediation_auto_selection_active
     && local.effective_member_effect[dr.reference_id] == ""
     && !local.member_wired_to_initiative_effect[dr.reference_id]

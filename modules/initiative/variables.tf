@@ -183,8 +183,9 @@ locals {
       # parameter would be declared but unused, and mapping it would let an
       # assignment effect fabricate remediation eligibility the policy never
       # has. Members with NO rule visibility (schema-less pinned built-ins) keep
-      # the wiring - an explicitly supplied effect schema there IS the contract.
-      effect_parameter_unwired = try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), "") != "" && !can(regex("parameters\\('effect'\\)", try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), "")))
+      # the wiring only when an effect mapping is actually emitted from its
+      # explicit effect schema.
+      effect_parameter_unwired = try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), "") != "" && try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), "") != "[parameters('effect')]"
       # issue #65 (Codex P1): a member that DECLARES a required effect parameter
       # (no defaultValue) must keep its parameter_values.effect mapping even when
       # the rule effect is a literal: Azure requires every non-defaulted
@@ -194,7 +195,7 @@ locals {
       # via effect_parameter_wired so the mapping never fabricates remediation
       # eligibility the policy rule does not have.
       effect_parameter_required = contains(keys(try(jsondecode(d.parameters), {})), "effect") && !contains(keys(try(try(jsondecode(d.parameters), {}).effect, {})), "defaultValue")
-      effect_parameter_wired    = !(try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), "") != "" && !can(regex("parameters\\('effect'\\)", try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), ""))))
+      effect_parameter_wired    = try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), "") != "" ? try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), "") == "[parameters('effect')]" : contains(keys(try(jsondecode(d.parameters), {})), "effect")
     }
   }
 
