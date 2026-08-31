@@ -587,6 +587,57 @@ run "parameterized_rule_effect_remains_wired" {
 # whether or not the rule consumes it. The mapping is contract satisfaction
 # only: effect_parameter_wired stays false so an assignment effect cannot
 # fabricate remediation eligibility.
+# Schema-less pinned members have no visible policy_rule, but an explicit effect
+# schema still emits a mapping and therefore proves effect wiring.
+run "schema_less_effect_schema_emits_wired_mapping" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/providers/Microsoft.Authorization/policyDefinitions/invisible_member"
+        name         = "invisible_member"
+        display_name = "Invisible Member"
+        parameters   = jsonencode({ effect = { type = "String", defaultValue = "Audit" } })
+      }
+    ]
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].effect_parameter_wired == true
+    error_message = "A schema-less member with an effect schema and emitted mapping must be marked wired"
+  }
+
+  assert {
+    condition     = jsondecode(output.initiative.policy_definition_reference[0].parameter_values).effect.value == "[parameters('effect')]"
+    error_message = "A schema-less member with an effect schema must emit the effect mapping"
+  }
+}
+
+# Conditional expressions mention parameters('effect') but do not directly wire
+# the policy effect parameter, so they must remain ineligible for assignment
+# effect propagation.
+run "conditional_effect_expression_is_not_directly_wired" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/providers/Microsoft.Authorization/policyDefinitions/conditional_member"
+        name         = "conditional_member"
+        display_name = "Conditional Member"
+        parameters   = jsonencode({ effect = { type = "String", defaultValue = "Audit" } })
+        policy_rule  = jsonencode({ if = {}, then = { effect = "[if(condition(), parameters('effect'), 'Audit')]" } })
+      }
+    ]
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].effect_parameter_wired == false
+    error_message = "A conditional effect expression must not be treated as direct effect wiring"
+  }
+}
+
 run "required_effect_parameter_mapping_preserved_for_literal_rule" {
   command = plan
 

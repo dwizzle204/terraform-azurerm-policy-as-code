@@ -476,14 +476,14 @@ locals {
           for s in coalesce(o.selectors, []) :
           s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId"
         ]) == 0
-        || length([
+        || alltrue([
           for s in coalesce(o.selectors, []) :
-          s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId" && (
+          coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId" || (
             (length(coalesce(s.in, [])) > 0 && contains(coalesce(s.in, []), dr.reference_id))
             || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) > 0 && !contains(coalesce(s.not_in, []), dr.reference_id))
             || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) == 0)
           )
-        ]) > 0
+        ])
       )
     ]) > 0
   }

@@ -1493,3 +1493,40 @@ run "assignment_effect_does_not_rescue_required_mapping_unwired_member" {
     error_message = "A preserved required effect mapping must not reclassify a literal Audit member as remediable via assignment_effect (issue #65 Codex P1)"
   }
 }
+
+# Contradictory reference selectors cannot jointly select a member. Even when
+# paired with a resourceLocation selector, they must not make the member's
+# effect ambiguous or suppress its otherwise eligible remediation.
+run "contradictory_reference_selectors_are_not_location_ambiguous" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    location_filters    = ["westeurope"]
+    overrides = [
+      {
+        value = "Audit"
+        selectors = [
+          { kind = "policyDefinitionReferenceId", in = ["dine_member"] },
+          { kind = "policyDefinitionReferenceId", not_in = ["dine_member"] },
+          { kind = "resourceLocation", in = ["westeurope"] }
+        ]
+      }
+    ]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/dine_member"
+          reference_id         = "dine_member"
+          parameter_values     = jsonencode({ effect = { value = "DeployIfNotExists" } })
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 1 && output.remediation_tasks[0].policy_definition_reference_id == "dine_member"
+    error_message = "Contradictory reference selectors must not suppress remediation as a location-ambiguous override"
+  }
+}
