@@ -229,7 +229,13 @@ Enabling `collision_resistant_naming` changes the computed assignment name, forc
 Remediation is **opt-in and effect-aware**: the effective effect is the
 `assignment_effect` override or the policy rule's `then.effect`, matched against
 `remediate_effects` (default `[]` = disabled). `remediation_reference_ids`
-explicitly selects this definition by name when the resolved effect is unresolved (empty). Known non-remediable effects remain rejected even when explicitly listed. Module-managed
+explicitly selects this definition by name when the resolved effect is unresolved (empty). Known non-remediable effects remain rejected even when explicitly listed. An
+`overrides` entry carrying a `resourceLocation` selector — alone or mixed with a
+`policyDefinitionReferenceId` selector — makes the effective effect
+resource-dependent: automatic remediation is suppressed unless `location_filters`
+prove the override cannot apply to the remediated resources. An override with no
+selectors at all is an unconditional global override and its value is used as-is.
+Module-managed
 role assignments now run before remediation tasks (`depends_on`). See
 `modules/set_assignment/README.md` for the privilege table and externally
 managed identity/RBAC patterns. Migration: set

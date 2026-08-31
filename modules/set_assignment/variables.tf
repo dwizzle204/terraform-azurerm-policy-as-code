@@ -16,6 +16,17 @@ variable "initiative" {
       reference_id         = string
       parameter_values     = optional(string)
       version              = optional(string)
+      # issue #65: normalized effect source from the policy rule (literal effect,
+      # "[parameters('effect')]", or "" when unresolved). Optional so externally
+      # managed initiative data without rule visibility remains accepted.
+      declared_effect = optional(string)
+      # issue #65 (Codex P1): authoritative signal that the member's policy rule
+      # actually consumes the initiative effect parameter. A member can carry a
+      # parameter_values.effect mapping purely to satisfy a REQUIRED (no
+      # defaultValue) parameter contract while its rule effect stays literal;
+      # such a mapping must not make assignment_effect eligible. Optional with a
+      # parameter_values-based fallback for external initiative data.
+      effect_parameter_wired = optional(bool)
     })))
   })
 }
@@ -341,10 +352,24 @@ locals {
   # must use explicit remediation_reference_ids for unresolved selection instead
   # of pretending an assignment-level effect parameter exists.
   initiative_effect_parameter_declared = contains(keys(local.initiative_parameters_decoded), "effect")
-  initiative_member_wired_to_effect = length([
-    for dr in try(var.initiative.policy_definition_reference, []) : dr
-    if try(jsondecode(coalesce(dr.parameter_values, "{}")).effect.value, "") == "[parameters('effect')]"
-  ]) > 0
+  # issue #65: per-member wiring — assignment_effect may only override a member
+  # whose reference is actually wired to the initiative-level effect parameter
+  # (parameter_values interpolation "[parameters('effect')]"). Azure passes
+  # initiative parameters to specific member parameters through each reference's
+  # parameters mapping; an initiative parameter never implicitly replaces every
+  # member's effect.
+  member_wired_to_initiative_effect = {
+    for dr in local.member_definitions :
+    dr.reference_id => (
+      # issue #65 (Codex P1): the initiative module marks wiring explicitly
+      # (rule effect references the parameter). Fall back to the historical
+      # parameter_values inference only for external initiative data that does
+      # not carry the flag — a required-but-unconsumed effect mapping from that
+      # path cannot be distinguished there.
+      dr.effect_parameter_wired != null ? dr.effect_parameter_wired :
+      try(jsondecode(coalesce(dr.parameter_values, "{}")).effect.value, "") == "[parameters('effect')]"
+    )
+  }
   # issue #62: unknown assignment_parameters keys are values for parameters the
   # initiative does not declare; Azure rejects such payloads at apply.
   unknown_assignment_parameter_keys = var.assignment_parameters != null ? setsubtract(keys(var.assignment_parameters), keys(local.initiative_parameters_decoded)) : []
@@ -352,23 +377,155 @@ locals {
     for dr in local.member_definitions :
     dr.reference_id => try(jsondecode(coalesce(dr.parameter_values, "{}")).effect.value, "")
   }
+  # issue #65: normalized effect source from the policy rule itself, exposed by
+  # the initiative module on each reference. This makes literal
+  # DeployIfNotExists/Modify rules (which declare no effect parameter, so their
+  # reference carries no parameter_values effect entry) visible to remediation
+  # auto-detection instead of resolving to an unknown effect.
+  member_declared_effect = {
+    for dr in local.member_definitions :
+    dr.reference_id => try(lower(dr.declared_effect), "")
+  }
   member_effect = {
     for dr in local.member_definitions :
     dr.reference_id => lower(
+      # issue #65 (Codex P1): when the initiative explicitly marks the member
+      # unwired, the rule's literal declared_effect is authoritative — any
+      # parameter_values.effect entry is contract satisfaction for a required
+      # parameter, not an effect the rule actually consumes.
+      dr.effect_parameter_wired == false ? local.member_declared_effect[dr.reference_id] :
       can(regex("^\\[parameters\\('(.+?)'\\)\\]$", local.member_raw_effect[dr.reference_id])) ?
       tostring(try(
         var.assignment_parameters[regex("^\\[parameters\\('(.+?)'\\)\\]$", local.member_raw_effect[dr.reference_id])[0]],
         local.initiative_parameters_decoded[regex("^\\[parameters\\('(.+?)'\\)\\]$", local.member_raw_effect[dr.reference_id])[0]].defaultValue,
         ""
       )) :
-      local.member_raw_effect[dr.reference_id]
+      local.member_raw_effect[dr.reference_id] != "" ? local.member_raw_effect[dr.reference_id] :
+      local.member_declared_effect[dr.reference_id]
     )
   }
-  # assignment_effect overrides per-member effects for remediation eligibility
+  # issue #65: honor policyEffect assignment overrides. An override REPLACES the
+  # effective effect of the references it selects:
+  #  - overrides scoped by policyDefinitionReferenceId (in/not_in/absent
+  #    selectors) apply to the matching members; the last matching override wins
+  #  - an override with NO selectors at all is an unconditional global override
+  #    (Azure applies it to every reference); its value is used as-is
+  #  - ANY override carrying a resourceLocation selector — alone or mixed with
+  #    policyDefinitionReferenceId — is resource-dependent: the effective effect
+  #    can differ per remediated resource location, so it is treated as
+  #    unresolved (automatic selection suppressed) unless the task's
+  #    location_filters prove the override cannot apply to them (every
+  #    resourceLocation selector scopes by `in` and none of those locations
+  #    intersects location_filters). Explicit remediation_reference_ids remain
+  #    the opt-in path.
+  override_matches_by_reference = {
+    for dr in local.member_definitions :
+    dr.reference_id => [
+      # Azure ANDs all selectors, so an override whose resourceLocation selector
+      # is provably disjoint from the task's location_filters cannot apply to
+      # ANY remediated resource — its policyEffect value must not replace the
+      # base/member effect even when its referenceId selector matches (#65).
+      for idx, o in var.overrides :
+      lower(o.value) if !local.override_disjoint_from_location[idx] && (length(coalesce(o.selectors, [])) == 0 || alltrue([
+        for s in coalesce(o.selectors, []) :
+        coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId" || (
+          (length(coalesce(s.in, [])) > 0 && contains(coalesce(s.in, []), dr.reference_id))
+          || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) > 0 && !contains(coalesce(s.not_in, []), dr.reference_id))
+          || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) == 0)
+        )
+      ]))
+    ]
+  }
+  # issue #65: a resourceLocation selector makes an override resource-dependent
+  # regardless of its value (remediable or not) and regardless of whether it is
+  # mixed with a policyDefinitionReferenceId selector. The ambiguity is waived
+  # only when location_filters prove the override cannot touch the remediated
+  # resources: location_filters is non-empty AND every resourceLocation selector
+  # scopes by `in` AND none of those locations intersects location_filters.
+  override_disjoint_from_location = {
+    for idx, o in var.overrides : idx => (
+      length([
+        for s in coalesce(o.selectors, []) :
+        s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId"
+      ]) > 0
+      && length(var.location_filters) > 0
+      && length([
+        for s in coalesce(o.selectors, []) :
+        s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId" && (
+          length(coalesce(s.in, [])) == 0 || length(setintersection(coalesce(s.in, []), var.location_filters)) > 0
+        )
+      ]) == 0
+    )
+  }
+  override_is_location_dependent = {
+    for idx, o in var.overrides : idx => length([
+      for s in coalesce(o.selectors, []) :
+      s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId"
+    ]) > 0 && !local.override_disjoint_from_location[idx]
+  }
+  # an override is location-ambiguous for a member when it selects that member
+  # (via referenceId selectors, or globally via no/absent-referenceId selectors)
+  # AND carries a resourceLocation selector
+  override_location_ambiguous_by_reference = {
+    for dr in local.member_definitions :
+    dr.reference_id => length([
+      for idx, o in var.overrides :
+      idx if local.override_is_location_dependent[idx] && (
+        length(coalesce(o.selectors, [])) == 0
+        || length([
+          for s in coalesce(o.selectors, []) :
+          s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId"
+        ]) == 0
+        || alltrue([
+          for s in coalesce(o.selectors, []) :
+          coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId" || (
+            (length(coalesce(s.in, [])) > 0 && contains(coalesce(s.in, []), dr.reference_id))
+            || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) > 0 && !contains(coalesce(s.not_in, []), dr.reference_id))
+            || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) == 0)
+          )
+        ])
+      )
+    ]) > 0
+  }
+  # issue #62/#65: assignment_effect reaches ONLY wired members; unwired members
+  # keep their own resolved effect. Overrides take precedence over everything:
+  # Azure applies the override regardless of parameter wiring. Location-scoped
+  # (resource-dependent) overrides win over even a matching reference-scoped
+  # value because the effective effect cannot be proven for a given resource.
   effective_member_effect = {
     for dr in local.member_definitions :
-    dr.reference_id => var.assignment_effect != null ? lower(var.assignment_effect) : local.member_effect[dr.reference_id]
+    dr.reference_id => (
+      local.override_location_ambiguous_by_reference[dr.reference_id] ? "" :
+      length(local.override_matches_by_reference[dr.reference_id]) > 0 ? element(local.override_matches_by_reference[dr.reference_id], length(local.override_matches_by_reference[dr.reference_id]) - 1) :
+      var.assignment_effect != null && local.member_wired_to_initiative_effect[dr.reference_id] ? lower(var.assignment_effect) :
+      local.member_effect[dr.reference_id]
+    )
   }
+  # issue #65: per-remediated-member fail-fast. assignment_effect cannot rescue
+  # a member that is neither wired to the initiative effect parameter, nor
+  # covered by an explicit remediation_reference_id, nor resolvable on its own —
+  # such a member would silently produce zero remediation tasks.
+  # issue #65 (Codex P1): the fail-fast only applies when automatic remediation
+  # selection is actually active for the member. Remediation is opt-in, so an
+  # unresolved unwired member with remediate_effects = [] (or with only
+  # non-remediable remediate_effects values) is a valid opt-out, not an error;
+  # and a policyEffect override that RESOLVES the member (post-override
+  # effective effect known) needs no rescue either.
+  remediation_auto_selection_active = length([
+    for e in var.remediate_effects : e
+    if contains(["deployifnotexists", "modify"], lower(e))
+  ]) > 0
+  assignment_effect_orphan_members = [
+    for dr in local.member_definitions : dr.reference_id
+    if var.assignment_effect != null
+    && contains(["deployifnotexists", "modify"], try(lower(var.assignment_effect), ""))
+    && contains([for e in var.remediate_effects : lower(e)], try(lower(var.assignment_effect), ""))
+    && local.remediation_auto_selection_active
+    && local.effective_member_effect[dr.reference_id] == ""
+    && !local.member_wired_to_initiative_effect[dr.reference_id]
+    && local.member_effect[dr.reference_id] == ""
+    && !contains(var.remediation_reference_ids, dr.reference_id)
+  ]
   unknown_remediation_references = (
     length(var.remediation_reference_ids) > 0 && length(setsubtract(var.remediation_reference_ids, [for dr in local.member_definitions : dr.reference_id])) > 0 ?
     file("[ERROR] set_assignment: remediation_reference_ids [${join(", ", setsubtract(var.remediation_reference_ids, [for dr in local.member_definitions : dr.reference_id]))}] are not valid member references. Valid ids: [${join(", ", [for dr in local.member_definitions : dr.reference_id])}].") :

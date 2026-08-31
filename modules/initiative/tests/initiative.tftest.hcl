@@ -368,3 +368,322 @@ run "unversioned_builtin_version_null" {
     error_message = "Unversioned built-ins must emit no definitionVersion selector"
   }
 }
+
+# issue #65: literal policy_rule effects must be carried on the reference as a
+# normalized declared_effect so assignments can auto-detect remediation
+# eligibility without an effect parameter.
+run "literal_dine_effect_exposed_as_declared_effect" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyDefinitions/literal_dine"
+        name         = "literal_dine"
+        display_name = "Literal DINE"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring" })
+        parameters   = jsonencode({})
+        policy_rule = jsonencode({
+          if   = { field = "type", equals = "Microsoft.Compute/virtualMachines" }
+          then = { effect = "DeployIfNotExists", details = { type = "x" } }
+        })
+      }
+    ]
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].declared_effect == "deployifnotexists"
+    error_message = "A literal DeployIfNotExists policy_rule effect must be exposed as declared_effect on the reference (issue #65)"
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].parameter_values == null
+    error_message = "A member with no effect parameter must emit no parameter_values effect entry (issue #65)"
+  }
+}
+
+run "literal_modify_effect_exposed_as_declared_effect" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyDefinitions/literal_modify"
+        name         = "literal_modify"
+        display_name = "Literal Modify"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring" })
+        parameters   = jsonencode({})
+        policy_rule = jsonencode({
+          if   = { field = "type", equals = "Microsoft.Compute/virtualMachines" }
+          then = { effect = "Modify" }
+        })
+      }
+    ]
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].declared_effect == "modify"
+    error_message = "A literal Modify policy_rule effect must be exposed as declared_effect (issue #65)"
+  }
+}
+
+run "parameterized_effect_exposed_as_declared_effect" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyDefinitions/parameterized_effect"
+        name         = "parameterized_effect"
+        display_name = "Parameterized Effect"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring" })
+        parameters   = jsonencode({ effect = { type = "String", defaultValue = "DeployIfNotExists" } })
+        policy_rule = jsonencode({
+          if   = { field = "type", equals = "Microsoft.Compute/virtualMachines" }
+          then = { effect = "[parameters('effect')]", details = { type = "x" } }
+        })
+      }
+    ]
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].declared_effect == "[parameters('effect')]"
+    error_message = "A parameterized policy_rule effect must be exposed as the [parameters('effect')] source (issue #65)"
+  }
+
+  assert {
+    condition     = jsondecode(output.initiative.policy_definition_reference[0].parameter_values).effect.value == "[parameters('effect')]"
+    error_message = "Parameterized members must keep their parameter_values wiring (issue #65)"
+  }
+}
+
+run "literal_audit_effect_exposed_as_declared_effect" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyDefinitions/literal_audit"
+        name         = "literal_audit"
+        display_name = "Literal Audit"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring" })
+        parameters   = jsonencode({})
+        policy_rule = jsonencode({
+          if   = { field = "type", equals = "Microsoft.Compute/virtualMachines" }
+          then = { effect = "Audit" }
+        })
+      }
+    ]
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].declared_effect == "audit"
+    error_message = "A literal Audit policy_rule effect must be exposed as declared_effect so it stays excluded from remediation (issue #65)"
+  }
+}
+
+# issue #65 (oracle P1): a member whose policy rule effect is a LITERAL must not
+# get an effect entry in parameter_values even when it declares an effect
+# parameter — the declared-but-unused parameter must not be treated as wiring,
+# or an assignment effect could fabricate remediation eligibility the policy
+# rule never has.
+run "literal_rule_effect_does_not_wire_declared_effect_parameter" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyDefinitions/member_lit"
+        name         = "member_lit"
+        display_name = "Member Lit"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring" })
+        parameters = jsonencode({
+          effect = {
+            type          = "String"
+            defaultValue  = "Audit"
+            allowedValues = ["DeployIfNotExists", "Audit", "Disabled"]
+            metadata = {
+              displayName = "Effect"
+            }
+          }
+        })
+        policy_rule = jsonencode({
+          if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+          then = {
+            effect = "DeployIfNotExists"
+            details = {
+              type              = "Microsoft.Insights/diagnosticSettings"
+              roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+            }
+          }
+        })
+      }
+    ]
+  }
+
+  assert {
+    condition     = try(jsondecode(output.initiative.policy_definition_reference[0].parameter_values).effect == null, true)
+    error_message = "A literal policy rule effect must not be wired to the declared effect parameter; wiring it would let assignment effects fabricate remediation eligibility (issue #65)"
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].declared_effect == "deployifnotexists"
+    error_message = "The literal rule effect must still be carried as declared_effect for remediation classification (issue #65)"
+  }
+}
+
+# issue #65: control — a parameterized rule effect ([parameters('effect')]) IS
+# wired: parameter_values must carry the effect mapping.
+run "parameterized_rule_effect_remains_wired" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyDefinitions/member_par"
+        name         = "member_par"
+        display_name = "Member Par"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring" })
+        parameters = jsonencode({
+          effect = {
+            type          = "String"
+            defaultValue  = "DeployIfNotExists"
+            allowedValues = ["DeployIfNotExists", "Audit", "Disabled"]
+            metadata = {
+              displayName = "Effect"
+            }
+          }
+        })
+        policy_rule = jsonencode({
+          if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+          then = {
+            effect = "[parameters('effect')]"
+            details = {
+              type              = "Microsoft.Insights/diagnosticSettings"
+              roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+            }
+          }
+        })
+      }
+    ]
+  }
+
+  assert {
+    condition     = try(jsondecode(output.initiative.policy_definition_reference[0].parameter_values).effect.value, "") == "[parameters('effect')]"
+    error_message = "A parameterized rule effect must remain wired via parameter_values.effect (issue #65)"
+  }
+}
+
+# issue #65 (Codex P1): a member that DECLARES a REQUIRED effect parameter (no
+# defaultValue) but whose rule effect is a literal must KEEP its
+# parameter_values.effect mapping — Azure requires every non-defaulted
+# referenced-policy parameter to receive a value at initiative construction,
+# whether or not the rule consumes it. The mapping is contract satisfaction
+# only: effect_parameter_wired stays false so an assignment effect cannot
+# fabricate remediation eligibility.
+# Schema-less pinned members have no visible policy_rule, but an explicit effect
+# schema still emits a mapping and therefore proves effect wiring.
+run "schema_less_effect_schema_emits_wired_mapping" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/providers/Microsoft.Authorization/policyDefinitions/invisible_member"
+        name         = "invisible_member"
+        display_name = "Invisible Member"
+        parameters   = jsonencode({ effect = { type = "String", defaultValue = "Audit" } })
+      }
+    ]
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].effect_parameter_wired == true
+    error_message = "A schema-less member with an effect schema and emitted mapping must be marked wired"
+  }
+
+  assert {
+    condition     = jsondecode(output.initiative.policy_definition_reference[0].parameter_values).effect.value == "[parameters('effect')]"
+    error_message = "A schema-less member with an effect schema must emit the effect mapping"
+  }
+}
+
+# Conditional expressions mention parameters('effect') but do not directly wire
+# the policy effect parameter, so they must remain ineligible for assignment
+# effect propagation.
+run "conditional_effect_expression_is_not_directly_wired" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/providers/Microsoft.Authorization/policyDefinitions/conditional_member"
+        name         = "conditional_member"
+        display_name = "Conditional Member"
+        parameters   = jsonencode({ effect = { type = "String", defaultValue = "Audit" } })
+        policy_rule  = jsonencode({ if = {}, then = { effect = "[if(condition(), parameters('effect'), 'Audit')]" } })
+      }
+    ]
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].effect_parameter_wired == false
+    error_message = "A conditional effect expression must not be treated as direct effect wiring"
+  }
+}
+
+run "required_effect_parameter_mapping_preserved_for_literal_rule" {
+  command = plan
+
+  variables {
+    member_definitions = [
+      {
+        id           = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/policyDefinitions/member_req"
+        name         = "member_req"
+        display_name = "Member Req"
+        mode         = "All"
+        metadata     = jsonencode({ category = "Monitoring" })
+        parameters = jsonencode({
+          effect = {
+            type          = "String"
+            allowedValues = ["DeployIfNotExists", "Audit", "Disabled"]
+            metadata = {
+              displayName = "Effect"
+            }
+          }
+        })
+        policy_rule = jsonencode({
+          if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+          then = {
+            effect = "DeployIfNotExists"
+            details = {
+              type              = "Microsoft.Insights/diagnosticSettings"
+              roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+            }
+          }
+        })
+      }
+    ]
+  }
+
+  assert {
+    condition     = try(jsondecode(output.initiative.policy_definition_reference[0].parameter_values).effect.value, "") == "[parameters('effect')]"
+    error_message = "A required (no defaultValue) effect parameter must keep its parameter_values.effect mapping so Azure accepts the initiative (issue #65 Codex P1)"
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].effect_parameter_wired == false
+    error_message = "A literal rule effect must keep effect_parameter_wired=false even when the required mapping is preserved (issue #65 Codex P1)"
+  }
+
+  assert {
+    condition     = output.initiative.policy_definition_reference[0].declared_effect == "deployifnotexists"
+    error_message = "The literal rule effect must remain the declared_effect used for remediation classification (issue #65)"
+  }
+}

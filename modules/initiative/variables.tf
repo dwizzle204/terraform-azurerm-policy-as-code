@@ -169,6 +169,33 @@ locals {
         "Flagged by Policy: ${d.name}"
       )
       role_definition_ids = try(jsondecode(d.policy_rule).then.details.roleDefinitionIds, [])
+      # issue #65: normalized per-member effect source, carried on the initiative
+      # reference so assignments can classify remediation eligibility even when
+      # the policy rule's effect is a literal (no effect parameter exists, so
+      # parameter_values carries no effect entry). Values: a literal effect
+      # (e.g. "deployifnotexists"), an interpolation "[parameters('effect')]",
+      # or "" when unresolved/unknown (external or schema-less pinned members).
+      declared_effect = try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), "")
+      # issue #65: the declared effect parameter is only actually WIRED when the
+      # policy rule's effect references it ("[parameters('effect')]"). A member
+      # whose rule carries a KNOWN LITERAL effect (e.g. "DeployIfNotExists") must
+      # not get an effect entry in parameter_values: the initiative-level
+      # parameter would be declared but unused, and mapping it would let an
+      # assignment effect fabricate remediation eligibility the policy never
+      # has. Members with NO rule visibility (schema-less pinned built-ins) keep
+      # the wiring only when an effect mapping is actually emitted from its
+      # explicit effect schema.
+      effect_parameter_unwired = try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), "") != "" && try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), "") != "[parameters('effect')]"
+      # issue #65 (Codex P1): a member that DECLARES a required effect parameter
+      # (no defaultValue) must keep its parameter_values.effect mapping even when
+      # the rule effect is a literal: Azure requires every non-defaulted
+      # referenced-policy parameter to receive a value at initiative
+      # construction, regardless of whether the rule consumes it. Wiring
+      # eligibility for assignment-effect classification is tracked separately
+      # via effect_parameter_wired so the mapping never fabricates remediation
+      # eligibility the policy rule does not have.
+      effect_parameter_required = contains(keys(try(jsondecode(d.parameters), {})), "effect") && !contains(keys(try(try(jsondecode(d.parameters), {}).effect, {})), "defaultValue")
+      effect_parameter_wired    = try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), "") != "" ? try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), "") == "[parameters('effect')]" : contains(keys(try(jsondecode(d.parameters), {})), "effect")
     }
   }
 
@@ -177,15 +204,19 @@ locals {
   policy_definition_reference = {
     for k, v in local.member_properties :
     k => {
-      policy_definition_id = v.id
-      reference_id         = var.camel_case_references == false ? v.reference : replace(title(replace(v.reference, "/-|_|\\s/", " ")), "/\\s/", "")
-      version              = v.azure_definition_version
-      catalog_version      = v.catalog_version
-      parameter_values = length(v.parameters) > 0 ? jsonencode({
+      policy_definition_id   = v.id
+      reference_id           = var.camel_case_references == false ? v.reference : replace(title(replace(v.reference, "/-|_|\\s/", " ")), "/\\s/", "")
+      version                = v.azure_definition_version
+      catalog_version        = v.catalog_version
+      declared_effect        = v.declared_effect
+      effect_parameter_wired = v.effect_parameter_wired
+      parameter_values = length([
+        for i in keys(v.parameters) : i if i != "effect" || !v.effect_parameter_unwired || v.effect_parameter_required
+        ]) > 0 ? jsonencode({
         for i in keys(v.parameters) :
         i => {
           value = i == "effect" && var.merge_effects == false ? "[parameters('${i}_${v.reference}')]" : var.merge_parameters == false ? "[parameters('${i}_${v.reference}')]" : "[parameters('${i}')]"
-        }
+        } if i != "effect" || !v.effect_parameter_unwired || v.effect_parameter_required
       }) : null
     }
   }

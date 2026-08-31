@@ -311,9 +311,21 @@ locals {
   definition_parameters_decoded = try(jsondecode(var.definition.parameters), var.definition.parameters, {})
   # note: not coalesce() - it rejects empty strings, which are a valid
   # "no effect declared" outcome from try()
-  raw_effect             = var.assignment_effect != null ? var.assignment_effect : try(jsondecode(var.definition.policy_rule).then.effect, "")
+  # issue #65: assignment_effect is only a valid remediation classifier when the
+  # policy rule's effect is actually wired to the declared parameter
+  # (then.effect == "[parameters('effect')]"). A declared-but-unused parameter
+  # plus a literal Audit rule stays Audit: the assignment parameter value must
+  # never fabricate remediation eligibility the policy will not have. Literal
+  # rule effects keep driving eligibility regardless of assignment parameters.
+  policy_rule_effect_raw    = try(tostring(try(jsondecode(var.definition.policy_rule), var.definition.policy_rule).then.effect), "")
+  effect_wired_to_parameter = lower(local.policy_rule_effect_raw) == "[parameters('effect')]"
+  raw_effect = (
+    var.assignment_effect != null && local.effect_wired_to_parameter ? var.assignment_effect :
+    var.assignment_effect != null ? local.policy_rule_effect_raw :
+    local.policy_rule_effect_raw
+  )
   interpolated_parameter = can(regex("^\\[parameters\\('(.+?)'\\)\\]$", local.raw_effect)) ? regex("^\\[parameters\\('(.+?)'\\)\\]$", local.raw_effect)[0] : null
-  effective_effect = lower(
+  base_effect = lower(
     local.interpolated_parameter != null ?
     tostring(try(
       var.assignment_parameters[local.interpolated_parameter],
@@ -321,6 +333,81 @@ locals {
       ""
     )) :
     local.raw_effect
+  )
+  # issue #65: policyEffect overrides replace this definition's effective effect.
+  # Reference-scoped overrides (policyDefinitionReferenceId in/not_in/absent)
+  # resolve to the last matching override value. An override with NO selectors
+  # is an unconditional global override and its value is used as-is. ANY override
+  # carrying a resourceLocation selector — alone or mixed with a
+  # policyDefinitionReferenceId selector — is resource-dependent: the effective
+  # effect cannot be proven for a given remediated resource, so it is treated as
+  # unresolved unless the task's location_filters prove the override cannot apply
+  # (location_filters non-empty, every resourceLocation selector scopes by `in`,
+  # and none of those locations intersects location_filters). Explicit
+  # remediation_reference_ids remain the opt-in path.
+  definition_override_matches = [
+    # Azure ANDs all selectors, so an override whose resourceLocation selector
+    # is provably disjoint from the task's location_filters cannot apply to
+    # ANY remediated resource — its policyEffect value must not replace the
+    # definition's base effect (#65).
+    for idx, o in var.overrides :
+    lower(o.value) if !local.override_disjoint_from_location[idx] && (length(coalesce(o.selectors, [])) == 0 || length([
+      for s in coalesce(o.selectors, []) :
+      s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId" && (
+        (length(coalesce(s.in, [])) > 0 && contains(coalesce(s.in, []), try(var.definition.name, "")))
+        || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) > 0 && !contains(coalesce(s.not_in, []), try(var.definition.name, "")))
+        || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) == 0)
+      )
+    ]) > 0)
+  ]
+  definition_override_effect = length(local.definition_override_matches) > 0 ? element(local.definition_override_matches, length(local.definition_override_matches) - 1) : null
+  # issue #65: provably non-applicable location-scoped override (used above to
+  # exclude the override from matching entirely).
+  override_disjoint_from_location = {
+    for idx, o in var.overrides : idx => (
+      length([
+        for s in coalesce(o.selectors, []) :
+        s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId"
+      ]) > 0
+      && length(var.location_filters) > 0
+      && length([
+        for s in coalesce(o.selectors, []) :
+        s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId" && (
+          length(coalesce(s.in, [])) == 0 || length(setintersection(coalesce(s.in, []), var.location_filters)) > 0
+        )
+      ]) == 0
+    )
+  }
+  # issue #65: any resourceLocation-containing override (pure or mixed) is
+  # resource-dependent and suppresses automatic remediation unless provable.
+  override_is_location_dependent = {
+    for idx, o in var.overrides : idx => length([
+      for s in coalesce(o.selectors, []) :
+      s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId"
+    ]) > 0 && !local.override_disjoint_from_location[idx]
+  }
+  definition_scope_ambiguous_override = length([
+    for idx, o in var.overrides :
+    idx if local.override_is_location_dependent[idx] && (
+      length(coalesce(o.selectors, [])) == 0
+      || length([
+        for s in coalesce(o.selectors, []) :
+        s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId"
+      ]) == 0
+      || length([
+        for s in coalesce(o.selectors, []) :
+        s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId" && (
+          (length(coalesce(s.in, [])) > 0 && contains(coalesce(s.in, []), try(var.definition.name, "")))
+          || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) > 0 && !contains(coalesce(s.not_in, []), try(var.definition.name, "")))
+          || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) == 0)
+        )
+      ]) > 0
+    )
+  ]) > 0
+  effective_effect = (
+    local.definition_scope_ambiguous_override ? "" :
+    local.definition_override_effect != null ? local.definition_override_effect :
+    local.base_effect
   )
   # Explicit references are an escape hatch only when the effect is unresolved;
   # known effects remain subject to Azure's remediation-safe effect set.

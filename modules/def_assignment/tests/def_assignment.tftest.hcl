@@ -269,17 +269,22 @@ run "assignment_effect_override_drives_eligibility" {
     assignment_effect   = "Modify"
     remediate_effects   = ["Modify"]
     role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
-    # issue #62: assignment_effect requires a declared effect parameter
+    # issue #62/#65: assignment_effect requires a declared effect parameter that
+    # the policy rule actually wires via [parameters('effect')]
     definition = merge(var.definition, {
       parameters = jsonencode({
         effect = { type = "String", defaultValue = "AuditIfNotExists" }
+      })
+      policy_rule = jsonencode({
+        if   = {}
+        then = { effect = "[parameters('effect')]" }
       })
     })
   }
 
   assert {
     condition     = output.remediation_id != ""
-    error_message = "An assignment_effect override matching the filter makes the definition eligible"
+    error_message = "An assignment_effect override matching the filter makes a wired definition eligible"
   }
 }
 
@@ -431,8 +436,9 @@ run "assignment_parameters_unknown_key_fails" {
   ]
 }
 
-# issue #62: with a declared effect parameter, assignment_effect flows into the
-# normalized assignment payload and drives remediation eligibility.
+# issue #62/#65: with a declared effect parameter wired via
+# [parameters('effect')], assignment_effect flows into the normalized payload
+# and drives remediation eligibility.
 run "assignment_effect_with_declared_effect_param_payload" {
   command = plan
 
@@ -443,6 +449,10 @@ run "assignment_effect_with_declared_effect_param_payload" {
     definition = merge(var.definition, {
       parameters = jsonencode({
         effect = { type = "String", defaultValue = "AuditIfNotExists" }
+      })
+      policy_rule = jsonencode({
+        if   = {}
+        then = { effect = "[parameters('effect')]" }
       })
     })
   }
@@ -455,5 +465,279 @@ run "assignment_effect_with_declared_effect_param_payload" {
   assert {
     condition     = output.remediation_id != ""
     error_message = "A declared effect parameter plus assignment_effect must drive remediation eligibility (#62)"
+  }
+}
+
+# ---- issue #65: assignment_effect requires an actually wired effect parameter ----
+
+# A declared-but-unused effect parameter plus a literal Audit rule must stay
+# Audit: assignment_effect must not fabricate remediation eligibility the
+# policy will not have.
+run "declared_but_unwired_effect_param_keeps_literal_audit" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    assignment_effect   = "Modify"
+    definition = merge(var.definition, {
+      parameters = jsonencode({
+        effect = { type = "String", defaultValue = "Audit" }
+      })
+      policy_rule = jsonencode({
+        if   = { field = "type", equals = "Microsoft.Compute/virtualMachines" }
+        then = { effect = "Audit" }
+      })
+    })
+  }
+
+  assert {
+    condition     = output.remediation_id == ""
+    error_message = "A literal Audit policy rule with a declared-but-unwired effect parameter must not become remediable via assignment_effect=Modify (issue #65)"
+  }
+}
+
+# a parameterized then.effect continues to honor assignment_effect
+run "wired_effect_param_honors_assignment_effect" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    assignment_effect   = "Modify"
+    definition = merge(var.definition, {
+      parameters = jsonencode({
+        effect = { type = "String", defaultValue = "Audit" }
+      })
+      policy_rule = jsonencode({
+        if   = { field = "type", equals = "Microsoft.Compute/virtualMachines" }
+        then = { effect = "[parameters('effect')]", details = { type = "x" } }
+      })
+    })
+  }
+
+  assert {
+    condition     = output.remediation_id != ""
+    error_message = "A policy rule wired to [parameters('effect')] must honor assignment_effect=Modify for remediation eligibility (issue #65)"
+  }
+}
+
+# a literal DINE rule stays remediable regardless of unrelated assignment parameters
+run "literal_dine_rule_remediates_without_assignment_effect" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    definition = merge(var.definition, {
+      parameters = jsonencode({
+        effect = { type = "String", defaultValue = "Audit" }
+      })
+      policy_rule = jsonencode({
+        if   = { field = "type", equals = "Microsoft.Compute/virtualMachines" }
+        then = { effect = "DeployIfNotExists" }
+      })
+    })
+  }
+
+  assert {
+    condition     = output.remediation_id != ""
+    error_message = "A literal DeployIfNotExists policy rule must stay remediable even when an unrelated effect parameter is declared (issue #65)"
+  }
+}
+
+# ---- issue #65: policyEffect overrides ----
+
+run "override_to_audit_suppresses_definition_remediation" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    overrides = [
+      {
+        value     = "Audit"
+        selectors = [{ kind = "policyDefinitionReferenceId", in = ["mock_definition_name_exceeding_twentyfour_chars"] }]
+      }
+    ]
+    definition = merge(var.definition, {
+      policy_rule = jsonencode({
+        if   = { field = "type", equals = "Microsoft.Compute/virtualMachines" }
+        then = { effect = "DeployIfNotExists" }
+      })
+    })
+  }
+
+  assert {
+    condition     = output.remediation_id == ""
+    error_message = "A DINE definition overridden to Audit via policyDefinitionReferenceId must not receive a remediation task (issue #65)"
+  }
+}
+
+run "override_to_dine_enables_definition_remediation" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    overrides = [
+      {
+        value     = "DeployIfNotExists"
+        selectors = [{ kind = "policyDefinitionReferenceId", in = ["mock_definition_name_exceeding_twentyfour_chars"] }]
+      }
+    ]
+    definition = merge(var.definition, {
+      policy_rule = jsonencode({
+        if   = { field = "type", equals = "Microsoft.Compute/virtualMachines" }
+        then = { effect = "Audit" }
+      })
+    })
+  }
+
+  assert {
+    condition     = output.remediation_id != ""
+    error_message = "An Audit definition overridden to DeployIfNotExists is effectively DINE and must receive a remediation task (issue #65)"
+  }
+}
+
+# issue #65 (oracle blocker): a location-scoped override with a remediable value
+# (Modify) is still resource-dependent: automatic selection must be suppressed.
+run "location_scoped_remendiable_value_override_suppresses_selection" {
+  command = plan
+
+  variables {
+    assignment_enforcement_mode = true
+    remediate_effects           = ["DeployIfNotExists", "Modify"]
+    role_definition_ids         = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    overrides = [
+      {
+        value     = "Modify"
+        selectors = [{ kind = "resourceLocation", in = ["westeurope"] }]
+      }
+    ]
+    definition = merge(var.definition, {
+      policy_rule = jsonencode({
+        if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+        then = {
+          effect = "DeployIfNotExists"
+          details = {
+            roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+          }
+        }
+      })
+    })
+  }
+
+  assert {
+    condition     = output.remediation_id == ""
+    error_message = "A location-scoped override with a remediable value is resource-dependent; automatic remediation must be suppressed (issue #65)"
+  }
+}
+
+# issue #65: mixed referenceId + resourceLocation selectors are
+# resource-dependent even when the reference matches and the value is remediable.
+run "mixed_reference_location_override_suppresses_selection" {
+  command = plan
+
+  variables {
+    assignment_enforcement_mode = true
+    remediate_effects           = ["DeployIfNotExists", "Modify"]
+    role_definition_ids         = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    overrides = [
+      {
+        value = "Modify"
+        selectors = [
+          { kind = "policyDefinitionReferenceId", in = ["whitelist_regions"] },
+          { kind = "resourceLocation", in = ["westeurope"] }
+        ]
+      }
+    ]
+    definition = merge(var.definition, {
+      name = "whitelist_regions"
+      policy_rule = jsonencode({
+        if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+        then = {
+          effect = "DeployIfNotExists"
+          details = {
+            roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+          }
+        }
+      })
+    })
+  }
+
+  assert {
+    condition     = output.remediation_id == ""
+    error_message = "A mixed referenceId+resourceLocation override is resource-dependent; automatic remediation must be suppressed (issue #65)"
+  }
+}
+
+# issue #65: location_filters disjoint from the override's `in` locations prove
+# the override cannot apply, so automatic selection proceeds.
+run "location_override_disjoint_from_location_filters_is_provable" {
+  command = plan
+
+  variables {
+    assignment_enforcement_mode = true
+    remediate_effects           = ["DeployIfNotExists", "Modify"]
+    role_definition_ids         = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    location_filters            = ["northeurope"]
+    overrides = [
+      {
+        value     = "Audit"
+        selectors = [{ kind = "resourceLocation", in = ["westeurope"] }]
+      }
+    ]
+    definition = merge(var.definition, {
+      policy_rule = jsonencode({
+        if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+        then = {
+          effect = "DeployIfNotExists"
+          details = {
+            roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+          }
+        }
+      })
+    })
+  }
+
+  assert {
+    condition     = output.remediation_id != ""
+    error_message = "A location-scoped override whose `in` locations are disjoint from location_filters cannot affect the remediated resources; automatic selection must proceed (issue #65)"
+  }
+}
+
+# issue #65: an empty-selector override (no selectors at all) is an
+# unconditional GLOBAL override: the definition's effect becomes the override
+# value even though the policy rule says DeployIfNotExists.
+run "empty_selector_override_is_unconditional_global" {
+  command = plan
+
+  variables {
+    assignment_enforcement_mode = true
+    remediate_effects           = ["DeployIfNotExists", "Modify"]
+    role_definition_ids         = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    overrides = [
+      {
+        value     = "Audit"
+        selectors = []
+      }
+    ]
+    definition = merge(var.definition, {
+      policy_rule = jsonencode({
+        if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+        then = {
+          effect = "DeployIfNotExists"
+          details = {
+            roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+          }
+        }
+      })
+    })
+  }
+
+  assert {
+    condition     = output.remediation_id == ""
+    error_message = "An empty-selector override is an unconditional global override; the effective effect becomes Audit and no remediation task may be created (issue #65)"
   }
 }
