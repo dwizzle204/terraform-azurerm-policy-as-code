@@ -31,7 +31,8 @@ implicitly replaces every member's effect. This module therefore resolves the
 | `assignment_effect` | only members wired to `[parameters('effect')]` |
 | member `parameter_values.effect` (interpolation or literal) | that member |
 | member policy rule literal effect (`declared_effect`) | that member, when no effect parameter exists |
-| resourceLocation-scoped (or empty-selector) non-remediable overrides | effect treated as unresolved: automatic selection is suppressed; explicit `remediation_reference_ids` remain the opt-in path |
+| resourceLocation-scoped overrides (alone or mixed with a reference selector) | effect is resource-dependent: automatic selection is suppressed unless `location_filters` prove the override cannot apply; explicit `remediation_reference_ids` remain the opt-in path |
+| empty-selector overrides (no selectors at all) | unconditional global override: the override value replaces every member's effect |
 
 Literal `DeployIfNotExists` / `Modify` policy rules are auto-detected for
 remediation even without an effect parameter; `Audit` / `Deny` / `Disabled`

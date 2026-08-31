@@ -336,9 +336,15 @@ locals {
   )
   # issue #65: policyEffect overrides replace this definition's effective effect.
   # Reference-scoped overrides (policyDefinitionReferenceId in/not_in/absent)
-  # resolve to the last matching override value; resourceLocation-scoped (or
-  # empty-selector) overrides that could force a non-remediable effect are
-  # resource-dependent and treated conservatively as unresolved.
+  # resolve to the last matching override value. An override with NO selectors
+  # is an unconditional global override and its value is used as-is. ANY override
+  # carrying a resourceLocation selector — alone or mixed with a
+  # policyDefinitionReferenceId selector — is resource-dependent: the effective
+  # effect cannot be proven for a given remediated resource, so it is treated as
+  # unresolved unless the task's location_filters prove the override cannot apply
+  # (location_filters non-empty, every resourceLocation selector scopes by `in`,
+  # and none of those locations intersects location_filters). Explicit
+  # remediation_reference_ids remain the opt-in path.
   definition_override_matches = [
     for o in var.overrides :
     lower(o.value) if length(coalesce(o.selectors, [])) == 0 || length([
@@ -351,12 +357,38 @@ locals {
     ]) > 0
   ]
   definition_override_effect = length(local.definition_override_matches) > 0 ? element(local.definition_override_matches, length(local.definition_override_matches) - 1) : null
-  definition_scope_ambiguous_override = length([
-    for o in var.overrides :
-    o if length(coalesce(o.selectors, [])) > 0 && length([
+  # issue #65: any resourceLocation-containing override (pure or mixed) is
+  # resource-dependent and suppresses automatic remediation unless provable.
+  override_is_location_dependent = {
+    for idx, o in var.overrides : idx => length([
       for s in coalesce(o.selectors, []) :
-      s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId"
-    ]) == 0 && !contains(["deployifnotexists", "modify"], lower(o.value))
+      s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId"
+      ]) > 0 && !(
+      length(var.location_filters) > 0 && length([
+        for s in coalesce(o.selectors, []) :
+        s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId" && (
+          length(coalesce(s.in, [])) == 0 || length(setintersection(coalesce(s.in, []), var.location_filters)) > 0
+        )
+      ]) == 0
+    )
+  }
+  definition_scope_ambiguous_override = length([
+    for idx, o in var.overrides :
+    idx if local.override_is_location_dependent[idx] && (
+      length(coalesce(o.selectors, [])) == 0
+      || length([
+        for s in coalesce(o.selectors, []) :
+        s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId"
+      ]) == 0
+      || length([
+        for s in coalesce(o.selectors, []) :
+        s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId" && (
+          (length(coalesce(s.in, [])) > 0 && contains(coalesce(s.in, []), try(var.definition.name, "")))
+          || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) > 0 && !contains(coalesce(s.not_in, []), try(var.definition.name, "")))
+          || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) == 0)
+        )
+      ]) > 0
+    )
   ]) > 0
   effective_effect = (
     local.definition_scope_ambiguous_override ? "" :

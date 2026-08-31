@@ -1100,3 +1100,140 @@ run "location_scoped_override_explicit_reference_still_selects" {
     error_message = "Explicit remediation_reference_ids remain the opt-in path when override ambiguity suppresses automatic selection (issue #65)"
   }
 }
+
+# issue #65 (oracle blocker): a MIXED override (referenceId + resourceLocation)
+# is resource-dependent even though its value is remediable: automatic
+# selection must be suppressed for the selected member.
+run "mixed_reference_location_override_suppresses_automatic_selection" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    overrides = [
+      {
+        value = "DeployIfNotExists"
+        selectors = [
+          { kind = "policyDefinitionReferenceId", in = ["dine_member"] },
+          { kind = "resourceLocation", in = ["westeurope"] }
+        ]
+      }
+    ]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/dine_member"
+          reference_id         = "dine_member"
+          parameter_values     = jsonencode({ effect = { value = "DeployIfNotExists" } })
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 0
+    error_message = "A mixed referenceId+resourceLocation override is resource-dependent; automatic remediation must be suppressed even for a remediable override value (issue #65)"
+  }
+}
+
+# issue #65 (oracle blocker): a location-scoped override whose value is itself
+# remediable (DeployIfNotExists) is still resource-dependent and must suppress
+# automatic selection — the old logic only flagged 4 hard-coded non-remediable
+# values and let location-scoped DINE/Modify through as static.
+run "location_scoped_remendiable_value_override_suppresses_automatic_selection" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    overrides = [
+      {
+        value     = "Modify"
+        selectors = [{ kind = "resourceLocation", in = ["westeurope"] }]
+      }
+    ]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/dine_member"
+          reference_id         = "dine_member"
+          parameter_values     = jsonencode({ effect = { value = "DeployIfNotExists" } })
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 0
+    error_message = "A location-scoped override with a remediable value is still resource-dependent; automatic remediation must be suppressed (issue #65)"
+  }
+}
+
+# issue #65: ambiguity is waived when location_filters prove the override cannot
+# touch the remediated resources: the override scopes by `in` and none of those
+# locations intersects location_filters.
+run "location_override_disjoint_from_location_filters_is_provable" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    location_filters    = ["northeurope"]
+    overrides = [
+      {
+        value     = "Audit"
+        selectors = [{ kind = "resourceLocation", in = ["westeurope"] }]
+      }
+    ]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/dine_member"
+          reference_id         = "dine_member"
+          parameter_values     = jsonencode({ effect = { value = "DeployIfNotExists" } })
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 1 && output.remediation_tasks[0].policy_definition_reference_id == "dine_member"
+    error_message = "A location-scoped override whose `in` locations are disjoint from location_filters cannot affect the remediated resources; automatic selection must proceed (issue #65)"
+  }
+}
+
+# issue #65: an empty-selector override (no selectors at all) is an
+# unconditional GLOBAL override: its value replaces every member's effect.
+run "empty_selector_override_is_unconditional_global" {
+  command = plan
+
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    overrides = [
+      {
+        value     = "Audit"
+        selectors = []
+      }
+    ]
+    initiative = merge(var.initiative, {
+      policy_definition_reference = [
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/dine_member"
+          reference_id         = "dine_member"
+          parameter_values     = jsonencode({ effect = { value = "DeployIfNotExists" } })
+        },
+        {
+          policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/dine_member_two"
+          reference_id         = "dine_member_two"
+          parameter_values     = jsonencode({ effect = { value = "DeployIfNotExists" } })
+        }
+      ]
+    })
+  }
+
+  assert {
+    condition     = length(output.remediation_tasks) == 0
+    error_message = "An empty-selector override is an unconditional global override; every member's effect becomes Audit and no remediation tasks may be created (issue #65)"
+  }
+}

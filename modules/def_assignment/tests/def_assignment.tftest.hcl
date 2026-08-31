@@ -599,3 +599,145 @@ run "override_to_dine_enables_definition_remediation" {
     error_message = "An Audit definition overridden to DeployIfNotExists is effectively DINE and must receive a remediation task (issue #65)"
   }
 }
+
+# issue #65 (oracle blocker): a location-scoped override with a remediable value
+# (Modify) is still resource-dependent: automatic selection must be suppressed.
+run "location_scoped_remendiable_value_override_suppresses_selection" {
+  command = plan
+
+  variables {
+    assignment_enforcement_mode = true
+    remediate_effects           = ["DeployIfNotExists", "Modify"]
+    role_definition_ids         = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    overrides = [
+      {
+        value     = "Modify"
+        selectors = [{ kind = "resourceLocation", in = ["westeurope"] }]
+      }
+    ]
+    definition = merge(var.definition, {
+      policy_rule = jsonencode({
+        if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+        then = {
+          effect = "DeployIfNotExists"
+          details = {
+            roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+          }
+        }
+      })
+    })
+  }
+
+  assert {
+    condition     = output.remediation_id == ""
+    error_message = "A location-scoped override with a remediable value is resource-dependent; automatic remediation must be suppressed (issue #65)"
+  }
+}
+
+# issue #65: mixed referenceId + resourceLocation selectors are
+# resource-dependent even when the reference matches and the value is remediable.
+run "mixed_reference_location_override_suppresses_selection" {
+  command = plan
+
+  variables {
+    assignment_enforcement_mode = true
+    remediate_effects           = ["DeployIfNotExists", "Modify"]
+    role_definition_ids         = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    overrides = [
+      {
+        value = "Modify"
+        selectors = [
+          { kind = "policyDefinitionReferenceId", in = ["whitelist_regions"] },
+          { kind = "resourceLocation", in = ["westeurope"] }
+        ]
+      }
+    ]
+    definition = merge(var.definition, {
+      name = "whitelist_regions"
+      policy_rule = jsonencode({
+        if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+        then = {
+          effect = "DeployIfNotExists"
+          details = {
+            roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+          }
+        }
+      })
+    })
+  }
+
+  assert {
+    condition     = output.remediation_id == ""
+    error_message = "A mixed referenceId+resourceLocation override is resource-dependent; automatic remediation must be suppressed (issue #65)"
+  }
+}
+
+# issue #65: location_filters disjoint from the override's `in` locations prove
+# the override cannot apply, so automatic selection proceeds.
+run "location_override_disjoint_from_location_filters_is_provable" {
+  command = plan
+
+  variables {
+    assignment_enforcement_mode = true
+    remediate_effects           = ["DeployIfNotExists", "Modify"]
+    role_definition_ids         = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    location_filters            = ["northeurope"]
+    overrides = [
+      {
+        value     = "Audit"
+        selectors = [{ kind = "resourceLocation", in = ["westeurope"] }]
+      }
+    ]
+    definition = merge(var.definition, {
+      policy_rule = jsonencode({
+        if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+        then = {
+          effect = "DeployIfNotExists"
+          details = {
+            roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+          }
+        }
+      })
+    })
+  }
+
+  assert {
+    condition     = output.remediation_id != ""
+    error_message = "A location-scoped override whose `in` locations are disjoint from location_filters cannot affect the remediated resources; automatic selection must proceed (issue #65)"
+  }
+}
+
+# issue #65: an empty-selector override (no selectors at all) is an
+# unconditional GLOBAL override: the definition's effect becomes the override
+# value even though the policy rule says DeployIfNotExists.
+run "empty_selector_override_is_unconditional_global" {
+  command = plan
+
+  variables {
+    assignment_enforcement_mode = true
+    remediate_effects           = ["DeployIfNotExists", "Modify"]
+    role_definition_ids         = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    overrides = [
+      {
+        value     = "Audit"
+        selectors = []
+      }
+    ]
+    definition = merge(var.definition, {
+      policy_rule = jsonencode({
+        if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+        then = {
+          effect = "DeployIfNotExists"
+          details = {
+            roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+          }
+        }
+      })
+    })
+  }
+
+  assert {
+    condition     = output.remediation_id == ""
+    error_message = "An empty-selector override is an unconditional global override; the effective effect becomes Audit and no remediation task may be created (issue #65)"
+  }
+}

@@ -388,11 +388,16 @@ locals {
   # effective effect of the references it selects:
   #  - overrides scoped by policyDefinitionReferenceId (in/not_in/absent
   #    selectors) apply to the matching members; the last matching override wins
-  #  - overrides carrying only resourceLocation selectors (or no selectors at
-  #    all, which Azure applies to every reference) make the effective effect
-  #    resource/scope-dependent: treated conservatively as unresolved so
-  #    automatic selection is suppressed and explicit
-  #    remediation_reference_ids remain the opt-in path
+  #  - an override with NO selectors at all is an unconditional global override
+  #    (Azure applies it to every reference); its value is used as-is
+  #  - ANY override carrying a resourceLocation selector — alone or mixed with
+  #    policyDefinitionReferenceId — is resource-dependent: the effective effect
+  #    can differ per remediated resource location, so it is treated as
+  #    unresolved (automatic selection suppressed) unless the task's
+  #    location_filters prove the override cannot apply to them (every
+  #    resourceLocation selector scopes by `in` and none of those locations
+  #    intersects location_filters). Explicit remediation_reference_ids remain
+  #    the opt-in path.
   override_matches_by_reference = {
     for dr in local.member_definitions :
     dr.reference_id => [
@@ -407,28 +412,58 @@ locals {
       ]) > 0
     ]
   }
-  override_non_reference_selector_values = distinct(flatten([
-    for o in var.overrides :
-    [lower(o.value)] if length(coalesce(o.selectors, [])) > 0 && length([
+  # issue #65: a resourceLocation selector makes an override resource-dependent
+  # regardless of its value (remediable or not) and regardless of whether it is
+  # mixed with a policyDefinitionReferenceId selector. The ambiguity is waived
+  # only when location_filters prove the override cannot touch the remediated
+  # resources: location_filters is non-empty AND every resourceLocation selector
+  # scopes by `in` AND none of those locations intersects location_filters.
+  override_is_location_dependent = {
+    for idx, o in var.overrides : idx => length([
       for s in coalesce(o.selectors, []) :
-      s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId"
-    ]) == 0
-  ]))
-  # true when a location/wildcard override could change a member's effect to a
-  # non-remediable value depending on the remediated resource
-  override_scope_ambiguous = length(local.override_non_reference_selector_values) > 0 && (
-    contains(local.override_non_reference_selector_values, "audit")
-    || contains(local.override_non_reference_selector_values, "disabled")
-    || contains(local.override_non_reference_selector_values, "auditifnotexists")
-    || contains(local.override_non_reference_selector_values, "deny")
-  )
+      s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId"
+      ]) > 0 && !(
+      length(var.location_filters) > 0 && length([
+        for s in coalesce(o.selectors, []) :
+        s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId" && (
+          length(coalesce(s.in, [])) == 0 || length(setintersection(coalesce(s.in, []), var.location_filters)) > 0
+        )
+      ]) == 0
+    )
+  }
+  # an override is location-ambiguous for a member when it selects that member
+  # (via referenceId selectors, or globally via no/absent-referenceId selectors)
+  # AND carries a resourceLocation selector
+  override_location_ambiguous_by_reference = {
+    for dr in local.member_definitions :
+    dr.reference_id => length([
+      for idx, o in var.overrides :
+      idx if local.override_is_location_dependent[idx] && (
+        length(coalesce(o.selectors, [])) == 0
+        || length([
+          for s in coalesce(o.selectors, []) :
+          s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId"
+        ]) == 0
+        || length([
+          for s in coalesce(o.selectors, []) :
+          s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId" && (
+            (length(coalesce(s.in, [])) > 0 && contains(coalesce(s.in, []), dr.reference_id))
+            || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) > 0 && !contains(coalesce(s.not_in, []), dr.reference_id))
+            || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) == 0)
+          )
+        ]) > 0
+      )
+    ]) > 0
+  }
   # issue #62/#65: assignment_effect reaches ONLY wired members; unwired members
   # keep their own resolved effect. Overrides take precedence over everything:
-  # Azure applies the override regardless of parameter wiring.
+  # Azure applies the override regardless of parameter wiring. Location-scoped
+  # (resource-dependent) overrides win over even a matching reference-scoped
+  # value because the effective effect cannot be proven for a given resource.
   effective_member_effect = {
     for dr in local.member_definitions :
     dr.reference_id => (
-      local.override_scope_ambiguous ? "" :
+      local.override_location_ambiguous_by_reference[dr.reference_id] ? "" :
       length(local.override_matches_by_reference[dr.reference_id]) > 0 ? element(local.override_matches_by_reference[dr.reference_id], length(local.override_matches_by_reference[dr.reference_id]) - 1) :
       var.assignment_effect != null && local.member_wired_to_initiative_effect[dr.reference_id] ? lower(var.assignment_effect) :
       local.member_effect[dr.reference_id]
