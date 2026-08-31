@@ -193,7 +193,7 @@ locals {
       # eligibility for assignment-effect classification is tracked separately
       # via effect_parameter_wired so the mapping never fabricates remediation
       # eligibility the policy rule does not have.
-      effect_parameter_required = contains(keys(try(jsondecode(d.parameters), {})), "effect") && !contains(keys(try(jsondecode(d.parameters), {}).effect), "defaultValue")
+      effect_parameter_required = contains(keys(try(jsondecode(d.parameters), {})), "effect") && !contains(keys(try(try(jsondecode(d.parameters), {}).effect, {})), "defaultValue")
       effect_parameter_wired    = !(try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), "") != "" && !can(regex("parameters\\('effect'\\)", try(lower(try(jsondecode(d.policy_rule), d.policy_rule).then.effect), ""))))
     }
   }
