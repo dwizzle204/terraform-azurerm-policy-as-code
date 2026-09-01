@@ -501,7 +501,7 @@ locals {
         # covers the ENTIRE location_filters set (every remediated location is
         # affected) and vice versa every selector set is fully covered by the
         # filters. Any partial coverage is resource-dependent: suppress.
-        && length(setunion(flatten([
+        && length(toset(flatten([
           for s in coalesce(o.selectors, []) : [for v in coalesce(s.in, []) : lower(trimspace(v))]
         ]))) >= length(local.normalized_location_filters)
         && alltrue([
