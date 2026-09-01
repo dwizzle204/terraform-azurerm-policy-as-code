@@ -60,7 +60,10 @@ resource "azurerm_management_group_policy_assignment" "def" {
       dynamic "selectors" {
         for_each = coalesce(overrides.value.selectors, [])
         content {
-          kind   = try(selectors.value.kind, null)
+          # validation requires an explicit kind == "resourceLocation"; the
+          # coalesce is a defensive default so a null kind can never fall
+          # through to the provider's policyDefinitionReferenceId default.
+          kind   = coalesce(try(selectors.value.kind, null), "resourceLocation")
           in     = try(selectors.value.in, null)
           not_in = try(selectors.value.not_in, null)
         }
@@ -122,7 +125,10 @@ resource "azurerm_subscription_policy_assignment" "def" {
       dynamic "selectors" {
         for_each = coalesce(overrides.value.selectors, [])
         content {
-          kind   = try(selectors.value.kind, null)
+          # validation requires an explicit kind == "resourceLocation"; the
+          # coalesce is a defensive default so a null kind can never fall
+          # through to the provider's policyDefinitionReferenceId default.
+          kind   = coalesce(try(selectors.value.kind, null), "resourceLocation")
           in     = try(selectors.value.in, null)
           not_in = try(selectors.value.not_in, null)
         }
@@ -184,7 +190,10 @@ resource "azurerm_resource_group_policy_assignment" "def" {
       dynamic "selectors" {
         for_each = coalesce(overrides.value.selectors, [])
         content {
-          kind   = try(selectors.value.kind, null)
+          # validation requires an explicit kind == "resourceLocation"; the
+          # coalesce is a defensive default so a null kind can never fall
+          # through to the provider's policyDefinitionReferenceId default.
+          kind   = coalesce(try(selectors.value.kind, null), "resourceLocation")
           in     = try(selectors.value.in, null)
           not_in = try(selectors.value.not_in, null)
         }
@@ -246,7 +255,10 @@ resource "azurerm_resource_policy_assignment" "def" {
       dynamic "selectors" {
         for_each = coalesce(overrides.value.selectors, [])
         content {
-          kind   = try(selectors.value.kind, null)
+          # validation requires an explicit kind == "resourceLocation"; the
+          # coalesce is a defensive default so a null kind can never fall
+          # through to the provider's policyDefinitionReferenceId default.
+          kind   = coalesce(try(selectors.value.kind, null), "resourceLocation")
           in     = try(selectors.value.in, null)
           not_in = try(selectors.value.not_in, null)
         }

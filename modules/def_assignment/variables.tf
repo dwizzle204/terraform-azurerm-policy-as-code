@@ -127,11 +127,24 @@ variable "overrides" {
   # initiative assignment; a direct policy-definition assignment has no member
   # reference ids, so this selector kind is semantically invalid here and is
   # rejected at plan time instead of being compared to the definition name.
+  # NOTE: s.kind must be non-null — an omitted kind is treated by the AzureRM
+  # provider as "policyDefinitionReferenceId", so coalescing null to a valid
+  # value here would silently re-open that bypass.
   validation {
     condition = alltrue(flatten([
       for o in var.overrides : [
         for s in coalesce(o.selectors, []) :
-        coalesce(s.kind, "resourceLocation") != "policyDefinitionReferenceId"
+        s.kind != null
+      ]
+    ]))
+    error_message = "Override selector kind must be explicitly set for direct policy-definition assignments; an omitted kind defaults to policyDefinitionReferenceId (initiative-scoped) and is not valid here."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for o in var.overrides : [
+        for s in coalesce(o.selectors, []) :
+        coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId"
       ]
     ]))
     error_message = "policyDefinitionReferenceId override selectors are only valid on initiative (set_assignment) assignments; a direct policy-definition assignment has no member reference ids. Use resourceLocation selectors or an override with no selectors (global)."
@@ -141,7 +154,7 @@ variable "overrides" {
     condition = alltrue(flatten([
       for o in var.overrides : [
         for s in coalesce(o.selectors, []) :
-        contains(["resourceLocation"], coalesce(s.kind, "resourceLocation"))
+        contains(["resourceLocation"], coalesce(s.kind, "policyDefinitionReferenceId"))
       ]
     ]))
     error_message = "Override selector kind must be resourceLocation for direct policy-definition assignments (policyDefinitionReferenceId is initiative-scoped)."

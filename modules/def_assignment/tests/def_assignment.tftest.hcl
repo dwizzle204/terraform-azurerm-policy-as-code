@@ -949,3 +949,21 @@ run "one_disjoint_location_selector_excludes_override" {
     error_message = "An override whose selector set is jointly unsatisfiable for the remediated locations cannot apply; base-effect remediation must proceed (issue #69)"
   }
 }
+
+# issue #69 (oracle P1): an omitted selector kind defaults to
+# policyDefinitionReferenceId in the AzureRM provider, so a direct assignment
+# must reject it explicitly rather than coalescing it to resourceLocation.
+run "omitted_override_kind_rejected_for_def_assignment" {
+  command = plan
+
+  variables {
+    overrides = [
+      {
+        value     = "Audit"
+        selectors = [{ in = ["whitelist_regions"] }]
+      }
+    ]
+  }
+
+  expect_failures = [var.overrides]
+}
