@@ -84,7 +84,10 @@ managed by a separate pipeline or a shared service), not by default.
 
 **Identity for the pipeline:** authenticate with OIDC / workload identity
 federation. Do not put client secrets or certificates in code or state. The
-framework itself contains no credentials and requires none to plan or test.
+framework itself contains no credentials. Mocked `terraform test` is
+credential-free; a real `terraform plan` that hydrates unpinned built-ins
+queries Azure via `data.azurerm_policy_definition_built_in` and requires an
+authenticated AzureRM provider.
 
 ---
 
