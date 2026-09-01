@@ -314,7 +314,7 @@ run "def_assignment_resource_selector_and_override_passthrough" {
 
   variables {
     resource_selectors = [
-      { name = "sdp", selectors = [{ kind = "resourceWithoutLocation", not_in = ["microsoft.contoso/legacy"] }] }
+      { name = "sdp", selectors = [{ kind = "resourceWithoutLocation", not_in = ["subscriptionLevelResources"] }] }
     ]
     overrides = [
       { value = "DeployIfNotExists", selectors = [{ kind = "resourceLocation", in = ["westeurope"] }] }
@@ -332,7 +332,7 @@ run "def_assignment_resource_selector_and_override_passthrough" {
   }
 
   assert {
-    condition     = length(azurerm_subscription_policy_assignment.def[0].resource_selectors[0].selectors[0].not_in) == 1 && contains(azurerm_subscription_policy_assignment.def[0].resource_selectors[0].selectors[0].not_in, "microsoft.contoso/legacy")
+    condition     = length(azurerm_subscription_policy_assignment.def[0].resource_selectors[0].selectors[0].not_in) == 1 && contains(azurerm_subscription_policy_assignment.def[0].resource_selectors[0].selectors[0].not_in, "subscriptionLevelResources")
     error_message = "Resource selector not_in values must pass through (#8)"
   }
 
@@ -548,6 +548,9 @@ run "literal_dine_rule_remediates_without_assignment_effect" {
 
 # ---- issue #65: policyEffect overrides ----
 
+# issue #69: policyDefinitionReferenceId selectors are initiative-scoped and
+# rejected for direct definition assignments; a selector-free override is the
+# direct-assignment equivalent for scoping the effect change.
 run "override_to_audit_suppresses_definition_remediation" {
   command = plan
 
@@ -555,10 +558,7 @@ run "override_to_audit_suppresses_definition_remediation" {
     remediate_effects   = ["DeployIfNotExists", "Modify"]
     role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
     overrides = [
-      {
-        value     = "Audit"
-        selectors = [{ kind = "policyDefinitionReferenceId", in = ["mock_definition_name_exceeding_twentyfour_chars"] }]
-      }
+      { value = "Audit", selectors = [] }
     ]
     definition = merge(var.definition, {
       policy_rule = jsonencode({
@@ -570,7 +570,7 @@ run "override_to_audit_suppresses_definition_remediation" {
 
   assert {
     condition     = output.remediation_id == ""
-    error_message = "A DINE definition overridden to Audit via policyDefinitionReferenceId must not receive a remediation task (issue #65)"
+    error_message = "A DINE definition overridden to Audit via a global override must not receive a remediation task (issue #65/#69)"
   }
 }
 
@@ -581,10 +581,7 @@ run "override_to_dine_enables_definition_remediation" {
     remediate_effects   = ["DeployIfNotExists", "Modify"]
     role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
     overrides = [
-      {
-        value     = "DeployIfNotExists"
-        selectors = [{ kind = "policyDefinitionReferenceId", in = ["mock_definition_name_exceeding_twentyfour_chars"] }]
-      }
+      { value = "DeployIfNotExists", selectors = [] }
     ]
     definition = merge(var.definition, {
       policy_rule = jsonencode({
@@ -596,7 +593,7 @@ run "override_to_dine_enables_definition_remediation" {
 
   assert {
     condition     = output.remediation_id != ""
-    error_message = "An Audit definition overridden to DeployIfNotExists is effectively DINE and must receive a remediation task (issue #65)"
+    error_message = "An Audit definition overridden to DeployIfNotExists is effectively DINE and must receive a remediation task (issue #65/#69)"
   }
 }
 
@@ -634,15 +631,12 @@ run "location_scoped_remendiable_value_override_suppresses_selection" {
   }
 }
 
-# issue #65: mixed referenceId + resourceLocation selectors are
-# resource-dependent even when the reference matches and the value is remediable.
-run "mixed_reference_location_override_suppresses_selection" {
+# issue #69: policyDefinitionReferenceId is invalid on direct assignments, so
+# the mixed reference/location case is now a plan-time rejection.
+run "mixed_reference_location_override_rejected_for_def_assignment" {
   command = plan
 
   variables {
-    assignment_enforcement_mode = true
-    remediate_effects           = ["DeployIfNotExists", "Modify"]
-    role_definition_ids         = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
     overrides = [
       {
         value = "Modify"
@@ -652,24 +646,9 @@ run "mixed_reference_location_override_suppresses_selection" {
         ]
       }
     ]
-    definition = merge(var.definition, {
-      name = "whitelist_regions"
-      policy_rule = jsonencode({
-        if = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
-        then = {
-          effect = "DeployIfNotExists"
-          details = {
-            roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
-          }
-        }
-      })
-    })
   }
 
-  assert {
-    condition     = output.remediation_id == ""
-    error_message = "A mixed referenceId+resourceLocation override is resource-dependent; automatic remediation must be suppressed (issue #65)"
-  }
+  expect_failures = [var.overrides]
 }
 
 # issue #65: location_filters disjoint from the override's `in` locations prove
@@ -811,4 +790,216 @@ run "friendly_location_name_suppresses_auto_remediation" {
     condition     = output.remediation_id == ""
     error_message = "Noncanonical friendly locations must conservatively suppress remediation"
   }
+}
+
+# ---- issue #69: direct-assignment selector parity and identity contract ----
+
+# issue #69 (P1): Azure ANDs all selectors within one override. A contradictory
+# reference-id selector pair must never be treated as matching. With
+# policyDefinitionReferenceId rejected outright for direct assignments, the
+# contradiction surfaces as a plan-time validation failure on the selector kind.
+run "contradictory_reference_selectors_rejected_for_def_assignment" {
+  command = plan
+  variables {
+    overrides = [
+      {
+        value = "Audit"
+        selectors = [
+          { kind = "policyDefinitionReferenceId", in = ["foo"] },
+          { kind = "policyDefinitionReferenceId", not_in = ["foo"] }
+        ]
+      }
+    ]
+  }
+  expect_failures = [var.overrides]
+}
+
+# issue #69 (P1/P2): policyDefinitionReferenceId selects members within an
+# initiative assignment; a direct definition assignment has no reference ids.
+run "policy_definition_reference_id_selector_rejected_for_def_assignment" {
+  command = plan
+  variables {
+    overrides = [
+      { value = "Audit", selectors = [{ kind = "policyDefinitionReferenceId", in = ["mock_definition_name_exceeding_twentyfour_chars"] }] }
+    ]
+  }
+  expect_failures = [var.overrides]
+}
+
+run "policy_definition_reference_id_not_in_selector_rejected_for_def_assignment" {
+  command = plan
+  variables {
+    overrides = [
+      { value = "Audit", selectors = [{ kind = "policyDefinitionReferenceId", not_in = ["mock_definition_name_exceeding_twentyfour_chars"] }] }
+    ]
+  }
+  expect_failures = [var.overrides]
+}
+
+# issue #69 (P2): resourceWithoutLocation only supports 'subscriptionLevelResources'.
+run "resource_without_location_valid_value_succeeds" {
+  command = plan
+  variables { resource_selectors = [{ name = "valid", selectors = [{ kind = "resourceWithoutLocation", in = ["subscriptionLevelResources"] }] }] }
+}
+
+run "resource_without_location_valid_not_in_succeeds" {
+  command = plan
+  variables { resource_selectors = [{ name = "valid", selectors = [{ kind = "resourceWithoutLocation", not_in = ["subscriptionLevelResources"] }] }] }
+}
+
+run "resource_without_location_invalid_value_rejected" {
+  command = plan
+  variables { resource_selectors = [{ name = "bad", selectors = [{ kind = "resourceWithoutLocation", in = ["anything"] }] }] }
+  expect_failures = [var.resource_selectors]
+}
+
+run "resource_without_location_invalid_not_in_rejected" {
+  command = plan
+  variables { resource_selectors = [{ name = "bad", selectors = [{ kind = "resourceWithoutLocation", not_in = ["anything"] }] }] }
+  expect_failures = [var.resource_selectors]
+}
+
+# issue #69 (P2): identity_ids contract — null or >=1 valid UAMI resource id.
+run "identity_ids_empty_list_rejected" {
+  command = plan
+  variables {
+    identity_ids        = []
+    role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+  }
+  expect_failures = [var.identity_ids]
+}
+
+run "identity_ids_malformed_rejected" {
+  command = plan
+  variables {
+    identity_ids        = ["/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-1/providers/Microsoft.ManagedIdentity/somethingElse/identity-1"]
+    role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+  }
+  expect_failures = [var.identity_ids]
+}
+
+run "identity_ids_valid_uami_selects_user_assigned" {
+  command = plan
+  variables {
+    identity_ids        = ["/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-1/providers/Microsoft.ManagedIdentity/userAssignedIdentities/identity-1"]
+    role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+  }
+  assert {
+    condition     = output.identity_id == "22222222-2222-2222-2222-222222222222"
+    error_message = "A valid UAMI resource id must produce a UserAssigned identity whose principal id is exposed"
+  }
+}
+
+# issue #69 (P1): multiple simultaneously satisfied resourceLocation selectors
+# (AND semantics) still allow the override to apply. Both selectors fully cover
+# location_filters, so the conjunctive proof succeeds: the Audit override
+# replaces the remediable base effect and suppresses remediation. A partial
+# (ambiguous) configuration would also suppress, but via the ambiguity path —
+# the paired positive assertion below proves full coverage really applies.
+run "multiple_satisfied_location_selectors_apply" {
+  command = plan
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    location_filters    = ["westeurope", "northeurope"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    overrides = [
+      {
+        value = "Audit"
+        selectors = [
+          { kind = "resourceLocation", in = ["WestEurope", "northeurope"] },
+          { kind = "resourceLocation", in = ["westeurope", "NorthEurope"] }
+        ]
+      }
+    ]
+    definition = merge(var.definition, {
+      policy_rule = jsonencode({
+        if   = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+        then = { effect = "DeployIfNotExists" }
+      })
+    })
+  }
+  assert {
+    condition     = output.remediation_id == ""
+    error_message = "When every resourceLocation selector fully covers location_filters (case-insensitively) the override provably applies and its non-remediable effect suppresses remediation (issue #69)"
+  }
+}
+
+# issue #69 (P2): the conjunctive proof must be a genuine positive case — with
+# full coverage the remediable override effect is applied and a remediation
+# task IS created. Ambiguity suppression would leave the unresolved effect and
+# produce no task, so this distinguishes application from ambiguity.
+run "multiple_full_coverage_location_selectors_apply_remediable_override" {
+  command = plan
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    location_filters    = ["westeurope", "northeurope"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    overrides = [
+      {
+        value = "DeployIfNotExists"
+        selectors = [
+          { kind = "resourceLocation", in = ["westeurope", "northeurope"] },
+          { kind = "resourceLocation", in = ["northeurope", "westeurope"] }
+        ]
+      }
+    ]
+    definition = merge(var.definition, {
+      policy_rule = jsonencode({
+        if   = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+        then = { effect = "Audit" }
+      })
+    })
+  }
+  assert {
+    condition     = output.remediation_id != ""
+    error_message = "Full selector coverage of location_filters must apply the remediable override effect and create a remediation task — ambiguity suppression would produce none (issue #69)"
+  }
+}
+
+# issue #69 (P1): one satisfied + one disjoint resourceLocation selector means
+# the override provably cannot apply to the remediated resources.
+run "one_disjoint_location_selector_excludes_override" {
+  command = plan
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    location_filters    = ["westeurope"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    overrides = [
+      {
+        value = "Audit"
+        selectors = [
+          { kind = "resourceLocation", in = ["westeurope"] },
+          { kind = "resourceLocation", in = ["eastus"] }
+        ]
+      }
+    ]
+    definition = merge(var.definition, {
+      policy_rule = jsonencode({
+        if   = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+        then = { effect = "DeployIfNotExists" }
+      })
+    })
+  }
+  assert {
+    condition     = output.remediation_id != ""
+    error_message = "An override whose selector set is jointly unsatisfiable for the remediated locations cannot apply; base-effect remediation must proceed (issue #69)"
+  }
+}
+
+# issue #69 (oracle P1): an omitted selector kind defaults to
+# policyDefinitionReferenceId in the AzureRM provider, so a direct assignment
+# must reject it explicitly rather than coalescing it to resourceLocation.
+run "omitted_override_kind_rejected_for_def_assignment" {
+  command = plan
+
+  variables {
+    overrides = [
+      {
+        value     = "Audit"
+        selectors = [{ in = ["whitelist_regions"] }]
+      }
+    ]
+  }
+
+  expect_failures = [var.overrides]
 }

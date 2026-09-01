@@ -18,6 +18,34 @@ If additional kinds
 are supported in future, remediation effect calculation must ignore non-
 `policyEffect` overrides and the provider compatibility floor will be reviewed.
 
+This module assigns a **direct policy definition**, which has no initiative
+member reference ids: `policyDefinitionReferenceId` override selectors are
+initiative-scoped and are **rejected at plan time** here (use the
+[`set_assignment`](../set_assignment) module for initiative assignments).
+Supported selector contracts for `overrides`:
+
+- **no selectors**: an unconditional global override
+- `resourceLocation` (`in` only): applied only when the selectors provably
+  cover the remediation task's `location_filters` — every filtered location
+  must be contained in **every** selector's `in` set (full coverage); any
+  partial coverage is resource-dependent (automatic remediation suppressed),
+  and the override is excluded entirely when provably disjoint
+
+`resource_selectors` additionally support `resourceType` and
+`resourceWithoutLocation`; the latter only accepts the value
+`subscriptionLevelResources`.
+
+
+
+**Conjunctive selectors:** Azure ANDs all selectors within one override, so an
+override only applies when **every** selector is satisfied; a contradictory
+selector pair (e.g. `in`/`not_in` for the same location set) never applies.
+`policyDefinitionReferenceId` selectors are initiative-scoped and rejected for
+direct definition assignments (#69).
+
+**`resourceWithoutLocation` selectors** only support the value
+`subscriptionLevelResources` (enforced at plan time).
+
 ## Examples
 
 ### Assign a definition with Modify effect to automatically create a role assignment and remediation task

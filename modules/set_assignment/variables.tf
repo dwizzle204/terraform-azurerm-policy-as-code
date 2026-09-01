@@ -196,11 +196,15 @@ variable "resource_selectors" {
         for s in rs.selectors : [
           s.in == null || s.not_in == null,
           length(coalesce(s.in, [])) <= 50,
-          length(coalesce(s.not_in, [])) <= 50
+          length(coalesce(s.not_in, [])) <= 50,
+          # issue #69: Azure documents resourceWithoutLocation selectors as
+          # supporting only the value 'subscriptionLevelResources'.
+          s.kind != "resourceWithoutLocation" || length(coalesce(s.in, [])) == 0 || length(setsubtract(coalesce(s.in, []), ["subscriptionLevelResources"])) == 0,
+          s.kind != "resourceWithoutLocation" || length(coalesce(s.not_in, [])) == 0 || length(setsubtract(coalesce(s.not_in, []), ["subscriptionLevelResources"])) == 0
         ]
       ])
     ]))
-    error_message = "Resource selector in and not_in lists are mutually exclusive and support a maximum of 50 values each."
+    error_message = "Resource selector in and not_in lists are mutually exclusive, support a maximum of 50 values each, and resourceWithoutLocation only supports the value 'subscriptionLevelResources'."
   }
 
   validation {
@@ -211,8 +215,22 @@ variable "resource_selectors" {
 
 variable "identity_ids" {
   type        = list(string)
-  description = "Optional list of User Managed Identity IDs which should be assigned to the Policy Initiative"
+  description = "Optional list of User Managed Identity IDs which should be assigned to the Policy Initiative. Must be null (SystemAssigned) or contain at least one valid User Assigned Managed Identity resource ID."
   default     = null
+
+  # issue #69: an empty list is non-null and would select UserAssigned with zero
+  # identity ids, which AzureRM rejects at apply. Fail fast instead, and require
+  # every supplied id to be a valid UAMI ARM resource id.
+  validation {
+    condition = var.identity_ids == null ? true : (
+      length(var.identity_ids) > 0
+      && alltrue([
+        for id in var.identity_ids :
+        can(regex("(?i)^/subscriptions/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/resourcegroups/[^/]+/providers/microsoft\\.managedidentity/userassignedidentities/[^/]+$", trimspace(id)))
+      ])
+    )
+    error_message = "identity_ids must be null (for SystemAssigned) or contain at least one valid User Assigned Managed Identity resource ID matching /subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{name}."
+  }
 }
 
 variable "re_evaluate_compliance" {
@@ -347,6 +365,10 @@ locals {
   parameters = var.assignment_effect != null ? jsonencode(merge(local.parameter_values, { effect = { value = var.assignment_effect } })) : (local.parameter_values != null ? jsonencode(local.parameter_values) : null)
 
   # determine if a managed identity should be created with this assignment
+  # issue #69: forward trimmed UAMI ids to resources — validation
+  # trimspace()s for matching but raw values were previously forwarded.
+  identity_ids_normalized = var.identity_ids != null ? [for id in var.identity_ids : trimspace(id)] : null
+
   identity_type = length(try(coalescelist(var.role_definition_ids, try(var.initiative.role_definition_ids, [])), [])) > 0 ? var.identity_ids != null ? { type = "UserAssigned" } : { type = "SystemAssigned" } : {}
 
   # try to use policy definition roles if explicit roles are omitted

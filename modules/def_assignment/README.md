@@ -19,6 +19,34 @@ If additional kinds
 are supported in future, remediation effect calculation must ignore non-
 `policyEffect` overrides and the provider compatibility floor will be reviewed.
 
+This module assigns a **direct policy definition**, which has no initiative
+member reference ids: `policyDefinitionReferenceId` override selectors are
+initiative-scoped and are **rejected at plan time** here (use the
+[`set_assignment`](../set_assignment) module for initiative assignments).
+Supported selector contracts for `overrides`:
+
+- **no selectors**: an unconditional global override
+- `resourceLocation` (`in` only): applied only when the selectors provably
+  cover the remediation task's `location_filters` — every filtered location
+  must be contained in **every** selector's `in` set (full coverage); any
+  partial coverage is resource-dependent (automatic remediation suppressed),
+  and the override is excluded entirely when provably disjoint
+
+`resource_selectors` additionally support `resourceType` and
+`resourceWithoutLocation`; the latter only accepts the value
+`subscriptionLevelResources`.
+
+
+
+**Conjunctive selectors:** Azure ANDs all selectors within one override, so an
+override only applies when **every** selector is satisfied; a contradictory
+selector pair (e.g. `in`/`not_in` for the same location set) never applies.
+`policyDefinitionReferenceId` selectors are initiative-scoped and rejected for
+direct definition assignments (#69).
+
+**`resourceWithoutLocation` selectors** only support the value
+`subscriptionLevelResources` (enforced at plan time).
+
 ## Examples
 
 ### Assign a definition with Modify effect to automatically create a role assignment and remediation task
@@ -239,12 +267,15 @@ Enabling `collision_resistant_naming` changes the computed assignment name, forc
 Remediation is **opt-in and effect-aware**: the effective effect is the
 `assignment_effect` override or the policy rule's `then.effect`, matched against
 `remediate_effects` (default `[]` = disabled). `remediation_reference_ids`
-explicitly selects this definition by name when the resolved effect is unresolved (empty). Known non-remediable effects remain rejected even when explicitly listed. An
-`overrides` entry carrying a `resourceLocation` selector — alone or mixed with a
-`policyDefinitionReferenceId` selector — makes the effective effect
-resource-dependent: automatic remediation is suppressed unless `location_filters`
-prove the override cannot apply to the remediated resources. An override with no
-selectors at all is an unconditional global override and its value is used as-is.
+explicitly selects this definition by name when the resolved effect is unresolved (empty). Known non-remediable effects remain rejected even when explicitly listed. Override selectors on a **direct definition assignment** are `resourceLocation`-only
+(`policyDefinitionReferenceId` is initiative-scoped and rejected at plan time, #69).
+An `overrides` entry is conjunctive (Azure ANDs its selectors): it replaces the
+effective effect only when the selectors provably **cover the entire**
+remediation task's `location_filters` — every filtered location must appear in
+every `resourceLocation` selector's `in` set (or when it has no selectors — a
+global override); it is excluded entirely when provably disjoint; otherwise
+(partial coverage) it is resource-dependent and automatic remediation is
+suppressed.
 Module-managed
 role assignments now run before remediation tasks (`depends_on`). See
 `modules/set_assignment/README.md` for the privilege table and externally
@@ -281,7 +312,7 @@ overrides = [
   {
     value     = "AuditIfNotExists"
     selectors = [
-      { kind = "policyDefinitionReferenceId", in = ["member_a"] }
+      { kind = "resourceLocation", in = ["westeurope"] }
     ]
   }
 ]
@@ -289,7 +320,10 @@ overrides = [
 
 - `value` replaces `effect` as the override payload key
 - `selectors` is always a list; each selector declares its `kind`
-  (`policyDefinitionReferenceId`; omitted kind defaults to it per provider schema)
+- direct definition assignments support `resourceLocation` override selectors
+  only (`policyDefinitionReferenceId` is initiative-scoped, #69); an override
+  with no selectors is a global override
 - `resource_selectors.selectors.kind` is required
-  (`resourceLocation`, `resourceType`, `resourceWithoutLocation`)
+  (`resourceLocation`, `resourceType`, `resourceWithoutLocation`; the last only
+  accepts the value `subscriptionLevelResources`)
 - maximum 10 entries per input (enforced)
