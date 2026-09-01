@@ -24,7 +24,7 @@ locals {
     # Allowed locations (parameterized deny/audit control)
     allowed_locations = {
       source        = "builtin"
-      definition_id = "/providers/Microsoft.Authorization/policyDefinitions/e56962a6-4747-49cd-b67b-bf8b01973c11"
+      definition_id = "/providers/Microsoft.Authorization/policyDefinitions/e56962a6-4747-49cd-b67b-bf8b01975c4c"
       metadata      = { controlIds = ["AZ-LZ-001", "AZ-SBX-001"], owner = "platform-team", stage = "guardrail" }
     }
   }

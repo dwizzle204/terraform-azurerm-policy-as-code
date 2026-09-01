@@ -53,7 +53,7 @@ direct definition assignments (#69).
 
 ```hcl
 module team_a_mg_inherit_resource_group_tags_modify {
-  source            = "gettek/policy-as-code/azurerm//modules/def_assignment"
+  source            = "../../modules/def_assignment"
   definition        = module.inherit_resource_group_tags_modify.definition
   assignment_scope  = data.azurerm_management_group.team_a.id
   assignment_effect = "Modify"
@@ -73,7 +73,7 @@ data azurerm_role_definition contributor {
 }
 
 module team_a_mg_inherit_resource_group_tags_modify {
-  source            = "gettek/policy-as-code/azurerm//modules/def_assignment"
+  source            = "../../modules/def_assignment"
   definition        = module.inherit_resource_group_tags_modify.definition
   assignment_scope  = data.azurerm_management_group.team_a.id
   assignment_effect = "Modify"
@@ -102,7 +102,7 @@ data azurerm_policy_definition_built_in deploy_law_on_linux_vms {
 }
 
 module team_a_mg_deploy_law_on_linux_vms {
-  source            = "gettek/policy-as-code/azurerm//modules/def_assignment"
+  source            = "../../modules/def_assignment"
   definition        = data.azurerm_policy_definition_built_in.deploy_law_on_linux_vms
   assignment_scope  = data.azurerm_management_group.team_a.id
   skip_remediation  = var.skip_remediation
@@ -127,7 +127,7 @@ data "azuread_group" "policy_remediation" {
 }
 
 module team_a_mg_inherit_resource_group_tags_modify {
-  source               = "gettek/policy-as-code/azurerm//modules/def_assignment"
+  source               = "../../modules/def_assignment"
   definition           = module.inherit_resource_group_tags_modify.definition
   assignment_scope     = data.azurerm_management_group.team_a.id
   skip_remediation     = false
@@ -154,7 +154,7 @@ The example below demonstrates the acceptable format for this module:
 
 ```hcl
 module "org_mg_whitelist_regions" {
-  source            = "gettek/policy-as-code/azurerm//modules/def_assignment"
+  source            = "../../modules/def_assignment"
   definition        = module.whitelist_regions.definition
   assignment_scope  = data.azurerm_management_group.org.id
   assignment_effect = "Deny"

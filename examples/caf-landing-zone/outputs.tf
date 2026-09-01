@@ -15,7 +15,7 @@ output "assignment_ids" {
   value       = module.policy_intent.assignment_ids
 }
 
-output "principal_ids" {
+output "assignment_principal_ids" {
   description = "Map of assignment key -> managed identity principal ID (Platform only; the other assignments have no identity)."
   value       = module.policy_intent.assignment_principal_ids
 }
@@ -33,24 +33,16 @@ output "exemption_ids" {
 # Intent inputs are exposed as contract outputs so offline tests can prove that
 # each logical assignment and waiver targets the intended scope and posture.
 output "assignment_scopes" {
-  description = "Map of logical assignment key -> requested scope."
-  value = {
-    platform      = var.platform_management_group_id
-    landing_zones = var.landing_zones_management_group_id
-    sandboxes     = var.sandboxes_management_group_id
-  }
+  description = "Map of logical assignment key -> resolved assignment ARM scope."
+  value       = module.policy_intent.assignment_scopes
 }
 
 output "assignment_enforcement" {
-  description = "Map of logical assignment key -> enforcement posture."
-  value = {
-    platform      = true
-    landing_zones = true
-    sandboxes     = false
-  }
+  description = "Map of logical assignment key -> resolved enforcement posture."
+  value       = module.policy_intent.assignment_enforcement
 }
 
 output "exemption_scopes" {
-  description = "Map of logical exemption key -> child scope."
-  value       = { lz_subscription_waiver = var.landing_zone_subscription_id }
+  description = "Map of logical exemption key -> resolved child scope."
+  value       = module.policy_intent.exemption_scopes
 }

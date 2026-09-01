@@ -20,7 +20,7 @@ Please see [duplicate_members.tf](../../examples/duplicate_members.tf) as en exa
 
 ```hcl
 module configure_asc_initiative {
-  source                  = "gettek/policy-as-code/azurerm//modules/initiative"
+  source                  = "../../modules/initiative"
   initiative_name         = "configure_asc_initiative"
   initiative_display_name = "[Security]: Configure Azure Security Center"
   initiative_description  = "Deploys and configures Azure Security Center settings and defines exports"
@@ -45,7 +45,7 @@ data azurerm_policy_definition deploy_law_on_linux_vms {
 }
 
 module configure_asc_initiative {
-  source                  = "gettek/policy-as-code/azurerm//modules/initiative"
+  source                  = "../../modules/initiative"
   initiative_name         = "configure_asc_initiative"
   initiative_display_name = "[Security]: Configure Azure Security Center"
   initiative_description  = "Deploys and configures Azure Security Center settings and defines exports"

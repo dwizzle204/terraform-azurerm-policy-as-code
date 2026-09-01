@@ -10,7 +10,7 @@ Exemptions can be used where `not_scopes` become time sensitive or require alter
 
 ```hcl
 module exemption_team_a_mg_deny_nic_public_ip {
-  source               = "gettek/policy-as-code/azurerm//modules/exemption"
+  source               = "../../modules/exemption"
   name                 = "Deny NIC Public IP Exemption"
   display_name         = "Exempted while testing"
   description          = "Allows NIC Public IPs for testing"
@@ -33,7 +33,7 @@ module exemption_team_a_mg_deny_nic_public_ip {
 
 ```hcl
 module exemption_team_a_mg_deny_nic_public_ip {
-  source = "gettek/policy-as-code/azurerm//modules/exemption"
+  source = "../../modules/exemption"
   for_each = toset([
     data.azurerm_management_group.team_a.id,
     data.azurerm_subscription.current.id,
@@ -52,7 +52,7 @@ module exemption_team_a_mg_deny_nic_public_ip {
 
 ```hcl
 module "exemption_configure_asc_initiative" {
-  source               = "gettek/policy-as-code/azurerm//modules/exemption"
+  source               = "../../modules/exemption"
   name                 = "Onboard subscription to ASC Exemption"
   display_name         = "Exempted while testing"
   description          = "Excludes subscription from ASC onboarding during development"
@@ -71,7 +71,7 @@ module "exemption_configure_asc_initiative" {
 
 ```hcl
 module exemption_team_a_mg_deny_nic_public_ip {
-  source               = "gettek/policy-as-code/azurerm//modules/exemption"
+  source               = "../../modules/exemption"
   name                 = "Deny NIC Public IP Exemption"
   display_name         = "Exempted while testing"
   description          = "Allows NIC Public IPs for testing"
@@ -91,7 +91,7 @@ data azurerm_resources keyvaults {
 }
 
 module exemption_team_a_mg_key_vaults_require_purge_protection {
-  source               = "gettek/policy-as-code/azurerm//modules/exemption"
+  source               = "../../modules/exemption"
   for_each             = toset(data.azurerm_resources.keyvaults.resources.*.id)
   name                 = "Key vaults should have purge protection enabled Exemption"
   display_name         = "Exempted while testing"

@@ -1,6 +1,6 @@
 # PowerShell Desired State Configs
 
-[![cd-machine-config](https://github.com/gettek/terraform-azurerm-policy-as-code/actions/workflows/cd-guest-config.yml/badge.svg)](https://github.com/gettek/terraform-azurerm-policy-as-code/actions/workflows/cd-guest-config.yml)
+[![cd-machine-config](https://github.com/dwizzle204/terraform-azurerm-policy-as-code/actions/workflows/cd-guest-config.yml/badge.svg)](https://github.com/dwizzle204/terraform-azurerm-policy-as-code/actions/workflows/cd-guest-config.yml)
 
 This folder contains example desired state configs for both windows and linux machines, compiled by [build_machine_config_packages.ps1](../build_machine_config_packages.ps1). See the example deployment [ReadMe](../../examples-machine-config) for more information.
 

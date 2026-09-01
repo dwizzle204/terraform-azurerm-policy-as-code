@@ -38,6 +38,21 @@ output "custom_definition_details" {
   value       = { for k, m in module.definitions : k => { management_group_id = m.definition.management_group_id, metadata = m.metadata } }
 }
 
+output "assignment_scopes" {
+  description = "Map of logical assignment key -> resolved assignment ARM scope."
+  value       = { for k, a in module.assignments : k => a.scope }
+}
+
+output "assignment_enforcement" {
+  description = "Map of logical assignment key -> resolved enforcement mode."
+  value       = { for k, a in module.assignments : k => a.enforcement_mode }
+}
+
+output "exemption_scopes" {
+  description = "Map of logical exemption key -> resolved exemption scope."
+  value       = { for k, e in module.exemptions : k => e.exemption.scope }
+}
+
 output "assignment_names" {
   description = "Map of logical assignment key -> resolved Policy Assignment name (defaults to the logical key)"
   value       = { for k, a in module.assignments : k => a.assignment_name }

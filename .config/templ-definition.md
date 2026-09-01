@@ -12,7 +12,7 @@ This module depends on populating `var.policy_name` and `var.policy_category` to
 
 ```hcl
 module whitelist_regions {
-  source                = "gettek/policy-as-code/azurerm//modules/definition"
+  source                = "../../modules/definition"
   policy_name           = "whitelist_regions"
   display_name          = "Allow resources only in whitelisted regions"
   policy_category       = "General"
@@ -33,7 +33,7 @@ locals {
 }
 
 module "configure_asc" {
-  source                = "gettek/policy-as-code/azurerm//modules/definition"
+  source                = "../../modules/definition"
   for_each              = local.security_center_policies
   policy_name           = each.key
   display_name          = title(replace(each.key, "_", " "))
@@ -47,7 +47,7 @@ module "configure_asc" {
 
 ```hcl
 module "file_path_test" {
-  source              = "gettek/policy-as-code/azurerm//modules/definition"
+  source              = "../../modules/definition"
   file_path           = "../path/to/file/onboard_to_automation_dsc_linux.json"
   management_group_id = data.azurerm_management_group.org.id
 }
@@ -57,7 +57,7 @@ Loop around a folders contents to create multiple definitions:
 
 ```hcl
 module "iam_test" {
-  source = "gettek/policy-as-code/azurerm//modules/definition"
+  source = "../../modules/definition"
   for_each = {
     for p in fileset(path.module, "../../azure/governance/policies/Storage/*.json") :
     trimsuffix(basename(p), ".json") => pathexpand(p)
@@ -75,7 +75,7 @@ locals {
 }
 
 module "parameterised_test" {
-  source              = "gettek/policy-as-code/azurerm//modules/definition"
+  source              = "../../modules/definition"
   policy_name         = "Custom Name"
   display_name        = "Custom Display Name"
   policy_description  = "Custom Description"

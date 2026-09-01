@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Credential-free validation gate for terraform-azurerm-policy-as-code (issue #16)
 # Layers: fmt -> per-module init/validate/test -> examples validate -> missing-definition negative check.
-# Requires no Azure tenant or credentials. Terraform >= 1.7 (mock_provider) required.
+# Requires no Azure tenant or credentials. Terraform >= 1.11 (mock_provider) required.
 set -euo pipefail
 
 TF="${TF_BIN:-terraform}"

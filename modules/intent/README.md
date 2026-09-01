@@ -25,7 +25,7 @@ Each entry in `assignments` supports:
 | `scope` | `string` | (required) | Full ARM id: management group, subscription, resource group or resource. The correct AzureRM assignment resource is selected automatically. |
 | `assignment_name` | `string` | logical key | Physical assignment name. Collision-resistant naming is always enabled; a deterministic hash suffix prevents long keys colliding at MG scope. |
 | `enforcement` | `bool` | `true` | Assignment enforcement mode. `false` = `DoNotEnforce` (request-time evaluation is not enforced). Does **not** block explicitly requested remediation. |
-| `effect` | `string` | per-definition | Assignment-level effect override. Only valid when the initiative declares an `effect` parameter that the member's rule actually consumes; otherwise use `assignment_parameters`. |
+| `effect` | `string` | per-definition | Assignment-level effect override. Only valid when the initiative declares an `effect` parameter that the member's rule actually consumes; otherwise use `parameters`. |
 | `parameters` | `any` | `{}` | Assignment parameter values keyed by initiative parameter name. Unknown keys fail fast at plan time. |
 | `assignment_location` | `string` | `westeurope` | Azure region for the assignment/remediation identity resources (only relevant when identity is created). |
 | `not_scopes` | `list(string)` | `[]` | ARM ids excluded from the assignment. Prefer a governed `exemptions` entry for time-bound exceptions. |
@@ -46,7 +46,7 @@ Each entry in `exemptions` supports:
 | `name` | `string` | (required) | Physical exemption name. |
 | `display_name` | `string` | (required) | Human-readable exemption title. |
 | `description` | `string` | (required) | Why the exemption exists. |
-| `category` | `string` | `Waiver` | Exemption category (`Waiver`, `Mitigated`, `Enforced`). Governed `Waiver`/`Mitigated` entries have extra requirements (expiry, mitigation). |
+| `category` | `string` | `Waiver` | Exemption category (`Waiver` or `Mitigated`). Governed `Waiver`/`Mitigated` entries have extra requirements (expiry, mitigation). |
 | `expires_on` | `string` | `null` | Expiry date (`YYYY-MM-DD`). Required for governed waivers; must be in the future. |
 | `policy_reference_ids` | `list(string)` | `[]` | Restrict the exemption to specific member reference ids; empty exempts the whole assignment. |
 | `metadata` | `any` | `null` | Free-form metadata passthrough. |

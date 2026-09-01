@@ -44,6 +44,11 @@ output "remediation_selected_references" {
   value       = [for d in local.definitions : d.reference_id]
 }
 
+output "scope" {
+  description = "Resolved ARM scope of the policy assignment."
+  value       = var.assignment_scope
+}
+
 output "enforcement_mode" {
   description = "The assignment's enforcementMode (request-time enforcement), independent of remediation task creation (#62)"
   value       = var.assignment_enforcement_mode
