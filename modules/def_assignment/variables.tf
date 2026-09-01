@@ -90,7 +90,7 @@ variable "non_compliance_message" {
 }
 
 variable "overrides" {
-  description = "Optional list of assignment Overrides (preview), max 10. Allows you to change the effect of a policy definition without modifying the underlying policy definition or using a parameterized effect in the policy definition. Selector kind must be one of: policyDefinitionReferenceId, resourceLocation"
+  description = "Optional list of assignment Overrides (preview), max 10. Allows you to change the effect of a policy definition without modifying the underlying policy definition or using a parameterized effect in the policy definition. Direct policy-definition assignments are NOT initiative members, so `policyDefinitionReferenceId` selectors are invalid here (they select definitions within an initiative assignment) and are rejected at plan time; only `resourceLocation` selectors are supported. An override with no selectors is a global override."
   type = list(object({
     value = string
     selectors = optional(list(object({
@@ -123,14 +123,28 @@ variable "overrides" {
     error_message = "Override selector in and not_in lists support a maximum of 50 values each."
   }
 
+  # issue #69: policyDefinitionReferenceId selects policy definitions WITHIN an
+  # initiative assignment; a direct policy-definition assignment has no member
+  # reference ids, so this selector kind is semantically invalid here and is
+  # rejected at plan time instead of being compared to the definition name.
   validation {
     condition = alltrue(flatten([
       for o in var.overrides : [
         for s in coalesce(o.selectors, []) :
-        contains(["policyDefinitionReferenceId", "resourceLocation"], coalesce(s.kind, "policyDefinitionReferenceId"))
+        coalesce(s.kind, "resourceLocation") != "policyDefinitionReferenceId"
       ]
     ]))
-    error_message = "Override selector kind must be one of: policyDefinitionReferenceId, resourceLocation."
+    error_message = "policyDefinitionReferenceId override selectors are only valid on initiative (set_assignment) assignments; a direct policy-definition assignment has no member reference ids. Use resourceLocation selectors or an override with no selectors (global)."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for o in var.overrides : [
+        for s in coalesce(o.selectors, []) :
+        contains(["resourceLocation"], coalesce(s.kind, "resourceLocation"))
+      ]
+    ]))
+    error_message = "Override selector kind must be resourceLocation for direct policy-definition assignments (policyDefinitionReferenceId is initiative-scoped)."
   }
 
   validation {
@@ -177,11 +191,15 @@ variable "resource_selectors" {
         for s in rs.selectors : [
           s.in == null || s.not_in == null,
           length(coalesce(s.in, [])) <= 50,
-          length(coalesce(s.not_in, [])) <= 50
+          length(coalesce(s.not_in, [])) <= 50,
+          # issue #69: Azure documents resourceWithoutLocation selectors as
+          # supporting only the value 'subscriptionLevelResources'.
+          s.kind != "resourceWithoutLocation" || length(coalesce(s.in, [])) == 0 || length(setsubtract(coalesce(s.in, []), ["subscriptionLevelResources"])) == 0,
+          s.kind != "resourceWithoutLocation" || length(coalesce(s.not_in, [])) == 0 || length(setsubtract(coalesce(s.not_in, []), ["subscriptionLevelResources"])) == 0
         ]
       ])
     ]))
-    error_message = "Resource selector in and not_in lists are mutually exclusive and support a maximum of 50 values each."
+    error_message = "Resource selector in and not_in lists are mutually exclusive, support a maximum of 50 values each, and resourceWithoutLocation only supports the value 'subscriptionLevelResources'."
   }
 
   validation {
@@ -193,8 +211,22 @@ variable "resource_selectors" {
 
 variable "identity_ids" {
   type        = list(string)
-  description = "Optional list of User Managed Identity IDs which should be assigned to the Policy Definition"
+  description = "Optional list of User Managed Identity IDs which should be assigned to the Policy Definition. Must be null (SystemAssigned) or contain at least one valid User Assigned Managed Identity resource ID."
   default     = null
+
+  # issue #69: an empty list is non-null and would select UserAssigned with zero
+  # identity ids, which AzureRM rejects at apply. Fail fast instead, and require
+  # every supplied id to be a valid UAMI ARM resource id.
+  validation {
+    condition = var.identity_ids == null || (
+      length(var.identity_ids) > 0
+      && alltrue([
+        for id in var.identity_ids :
+        can(regex("(?i)^/subscriptions/[0-9a-f-]{36}/resourcegroups/[^/]+/providers/microsoft\\.managedidentity/userassignedidentities/[^/]+$", trimspace(id)))
+      ])
+    )
+    error_message = "identity_ids must be null (for SystemAssigned) or contain at least one valid User Assigned Managed Identity resource ID matching /subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{name}."
+  }
 }
 
 variable "re_evaluate_compliance" {
@@ -384,75 +416,85 @@ locals {
     )) :
     local.raw_effect
   )
-  # issue #65: policyEffect overrides replace this definition's effective effect.
-  # Reference-scoped overrides (policyDefinitionReferenceId in/not_in/absent)
-  # resolve to the last matching override value. An override with NO selectors
-  # is an unconditional global override and its value is used as-is. ANY override
-  # carrying a resourceLocation selector — alone or mixed with a
-  # policyDefinitionReferenceId selector — is resource-dependent: the effective
-  # effect cannot be proven for a given remediated resource, so it is treated as
-  # unresolved unless the task's location_filters prove the override cannot apply
-  # (location_filters non-empty, every resourceLocation selector scopes by `in`,
-  # and none of those locations intersects location_filters). Explicit
-  # remediation_reference_ids remain the opt-in path.
-  definition_override_matches = [
-    # Azure ANDs all selectors, so an override whose resourceLocation selector
-    # is provably disjoint from the task's location_filters cannot apply to
-    # ANY remediated resource — its policyEffect value must not replace the
-    # definition's base effect (#65).
-    for idx, o in var.overrides :
-    lower(o.value) if !local.override_disjoint_from_location[idx] && (length(coalesce(o.selectors, [])) == 0 || length([
-      for s in coalesce(o.selectors, []) :
-      s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId" && (
-        (length(coalesce(s.in, [])) > 0 && contains(coalesce(s.in, []), try(var.definition.name, "")))
-        || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) > 0 && !contains(coalesce(s.not_in, []), try(var.definition.name, "")))
-        || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) == 0)
-      )
-    ]) > 0)
-  ]
-  definition_override_effect = length(local.definition_override_matches) > 0 ? element(local.definition_override_matches, length(local.definition_override_matches) - 1) : null
-  # issue #65: provably non-applicable location-scoped override (used above to
-  # exclude the override from matching entirely).
-  override_disjoint_from_location = {
+  # issue #65/#69: policyEffect overrides replace this definition's effective
+  # effect. policyDefinitionReferenceId selectors are rejected at plan time for
+  # direct definition assignments (issue #69), so every remaining selector is a
+  # resourceLocation selector and an override with NO selectors is an
+  # unconditional global override. Azure ANDs all selectors within one override,
+  # so selector groups are evaluated conjunctively (mirroring set_assignment):
+  #   - provably disjoint: location_filters is non-empty AND every resourceLocation
+  #     selector scopes by `in` AND at least one of those `in` sets does not
+  #     intersect location_filters — the override cannot apply to ANY remediated
+  #     resource and is excluded from effect replacement entirely.
+  #   - provably applies: the override has no selectors, OR location_filters is
+  #     non-empty AND every resourceLocation selector scopes by `in` AND every
+  #     one of those `in` sets intersects location_filters — its value replaces
+  #     the definition's base effect.
+  #   - anything else (a `not_in` resourceLocation selector, or selectors with
+  #     empty location_filters) is resource-dependent/ambiguous: the effective
+  #     effect cannot be proven for a given remediated resource, so automatic
+  #     remediation is suppressed. Explicit remediation_reference_ids remain
+  #     the opt-in path.
+  definition_override_has_selectors = {
+    for idx, o in var.overrides : idx => length(coalesce(o.selectors, [])) > 0
+  }
+  definition_override_all_in = {
     for idx, o in var.overrides : idx => (
-      length([
-        for s in coalesce(o.selectors, []) :
-        s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId"
-      ]) > 0
+      !local.definition_override_has_selectors[idx]
+      || alltrue([
+        for s in coalesce(o.selectors, []) : length(coalesce(s.in, [])) > 0
+      ])
+    )
+  }
+  # issue #67: disjointness may only be PROVEN when every location value on both
+  # sides is already in canonical form (lowercase alphanumeric/hyphen after
+  # trim+lower). Friendly names such as "East US 2" are semantically equal to
+  # "eastus2" in Azure, so a raw string mismatch must suppress automatic
+  # remediation instead of proving non-applicability.
+  definition_override_locations_canonical = {
+    for idx, o in var.overrides : idx => alltrue([
+      for v in concat(
+        flatten([for s in coalesce(o.selectors, []) : coalesce(s.in, [])]),
+        var.location_filters
+      ) : can(regex("^[a-z0-9-]+$", lower(trimspace(v))))
+    ])
+  }
+  definition_override_disjoint = {
+    for idx, o in var.overrides : idx => (
+      local.definition_override_has_selectors[idx]
+      && local.definition_override_all_in[idx]
       && length(var.location_filters) > 0
+      && local.definition_override_locations_canonical[idx]
       && length([
         for s in coalesce(o.selectors, []) :
-        s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId" && (
-          length(coalesce(s.in, [])) == 0 || !alltrue([for v in concat(coalesce(s.in, []), local.normalized_location_filters) : can(regex("^[a-z0-9-]+$", lower(trimspace(v))))]) || length(setintersection([for v in coalesce(s.in, []) : lower(trimspace(v))], local.normalized_location_filters)) > 0
-        )
-      ]) == 0
-    )
-  }
-  # issue #65: any resourceLocation-containing override (pure or mixed) is
-  # resource-dependent and suppresses automatic remediation unless provable.
-  override_is_location_dependent = {
-    for idx, o in var.overrides : idx => length([
-      for s in coalesce(o.selectors, []) :
-      s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId"
-    ]) > 0 && !local.override_disjoint_from_location[idx]
-  }
-  definition_scope_ambiguous_override = length([
-    for idx, o in var.overrides :
-    idx if local.override_is_location_dependent[idx] && (
-      length(coalesce(o.selectors, [])) == 0
-      || length([
-        for s in coalesce(o.selectors, []) :
-        s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId"
-      ]) == 0
-      || length([
-        for s in coalesce(o.selectors, []) :
-        s if coalesce(s.kind, "policyDefinitionReferenceId") == "policyDefinitionReferenceId" && (
-          (length(coalesce(s.in, [])) > 0 && contains(coalesce(s.in, []), try(var.definition.name, "")))
-          || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) > 0 && !contains(coalesce(s.not_in, []), try(var.definition.name, "")))
-          || (length(coalesce(s.in, [])) == 0 && length(coalesce(s.not_in, [])) == 0)
-        )
+        s if length(setintersection([for v in coalesce(s.in, []) : lower(trimspace(v))], local.normalized_location_filters)) == 0
       ]) > 0
     )
+  }
+  definition_override_applies = {
+    for idx, o in var.overrides : idx => (
+      !local.definition_override_has_selectors[idx]
+      || (
+        local.definition_override_all_in[idx]
+        && length(var.location_filters) > 0
+        && alltrue([
+          for s in coalesce(o.selectors, []) :
+          length(setintersection([for v in coalesce(s.in, []) : lower(trimspace(v))], local.normalized_location_filters)) > 0
+        ])
+      )
+    )
+  }
+  definition_override_matches = [
+    for idx, o in var.overrides :
+    lower(o.value) if !local.definition_override_disjoint[idx] && local.definition_override_applies[idx]
+  ]
+  definition_override_effect = length(local.definition_override_matches) > 0 ? element(local.definition_override_matches, length(local.definition_override_matches) - 1) : null
+  # issue #69: an override that neither provably applies nor is provably
+  # disjoint is resource-dependent for the remediated resources — suppress
+  # automatic remediation rather than guessing.
+  definition_scope_ambiguous_override = length([
+    for idx, o in var.overrides :
+    idx if !local.definition_override_disjoint[idx] && !local.definition_override_applies[idx]
   ]) > 0
   effective_effect = (
     local.definition_scope_ambiguous_override ? "" :

@@ -1601,3 +1601,68 @@ run "friendly_location_name_suppresses_auto_remediation" {
     error_message = "Noncanonical friendly locations must conservatively suppress remediation"
   }
 }
+
+# ---- issue #69: resourceWithoutLocation value contract and identity_ids ----
+
+run "resource_without_location_valid_value_succeeds" {
+  command = plan
+  variables { resource_selectors = [{ name = "valid", selectors = [{ kind = "resourceWithoutLocation", in = ["subscriptionLevelResources"] }] }] }
+}
+
+run "resource_without_location_valid_not_in_succeeds" {
+  command = plan
+  variables { resource_selectors = [{ name = "valid", selectors = [{ kind = "resourceWithoutLocation", not_in = ["subscriptionLevelResources"] }] }] }
+}
+
+run "resource_without_location_invalid_value_rejected" {
+  command = plan
+  variables { resource_selectors = [{ name = "bad", selectors = [{ kind = "resourceWithoutLocation", in = ["anything"] }] }] }
+  expect_failures = [var.resource_selectors]
+}
+
+run "resource_without_location_invalid_not_in_rejected" {
+  command = plan
+  variables { resource_selectors = [{ name = "bad", selectors = [{ kind = "resourceWithoutLocation", not_in = ["anything"] }] }] }
+  expect_failures = [var.resource_selectors]
+}
+
+run "identity_ids_empty_list_rejected" {
+  command = plan
+  variables {
+    identity_ids        = []
+    role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+  }
+  expect_failures = [var.identity_ids]
+}
+
+run "identity_ids_malformed_rejected" {
+  command = plan
+  variables {
+    identity_ids        = ["not-an-arm-id"]
+    role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+  }
+  expect_failures = [var.identity_ids]
+}
+
+run "identity_ids_valid_uami_selects_user_assigned" {
+  command = plan
+  variables {
+    identity_ids        = ["/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-1/providers/Microsoft.ManagedIdentity/userAssignedIdentities/identity-1"]
+    role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+  }
+  assert {
+    condition     = output.principal_id == "22222222-2222-2222-2222-222222222222"
+    error_message = "A valid UAMI resource id must produce a UserAssigned identity whose principal id is exposed"
+  }
+}
+
+run "identity_ids_null_default_remains_system_assigned" {
+  command = plan
+  variables {
+    role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+  }
+  assert {
+    condition     = output.principal_id == "22222222-2222-2222-2222-222222222222"
+    error_message = "identity_ids = null must keep the SystemAssigned identity path (issue #69)"
+  }
+}

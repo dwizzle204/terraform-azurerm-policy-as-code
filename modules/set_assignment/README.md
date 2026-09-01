@@ -48,6 +48,23 @@ If additional kinds
 are supported in future, remediation effect calculation must ignore non-
 `policyEffect` overrides and the provider compatibility floor will be reviewed.
 
+
+
+**Direct vs initiative assignments:** `policyDefinitionReferenceId` selectors
+select policy definitions **within an initiative assignment** and are only
+valid on the [`set_assignment`](../set_assignment) module; the
+[`def_assignment`](../def_assignment) module rejects them at plan time.
+
+
+
+**Conjunctive selectors:** Azure ANDs all selectors within one override, so
+multiple `policyDefinitionReferenceId` selectors must **all** match the member
+reference for the override to apply; a contradictory selector pair (e.g.
+`in`/`not_in` on the same reference) never applies.
+
+**`resourceWithoutLocation` selectors** only support the value
+`subscriptionLevelResources` (enforced at plan time).
+
 ## Examples
 
 ### Custom Policy Initiative Assignment with Not-Scope and Overrides (preview)
