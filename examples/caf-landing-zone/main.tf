@@ -116,7 +116,6 @@ module "policy_intent" {
       scope                     = var.landing_zones_management_group_id
       assignment_name           = "landing-zones-guardrails"
       enforcement               = true
-      effect                    = "Deny"
       remediate                 = false
       remediate_effects         = ["DeployIfNotExists", "Modify"]
       remediation_reference_ids = []
@@ -139,7 +138,6 @@ module "policy_intent" {
       scope                     = var.sandboxes_management_group_id
       assignment_name           = "sandboxes-baseline"
       enforcement               = false # DoNotEnforce: observe-first, still governed
-      effect                    = "Deny"
       remediate                 = false
       remediate_effects         = ["DeployIfNotExists", "Modify"]
       remediation_reference_ids = []

@@ -1,5 +1,7 @@
 # POLICY DEFINITION MODULE
 
+> These are in-checkout templates and use relative module paths. External consumers must use a pinned Git source such as `git::https://github.com/dwizzle204/terraform-azurerm-policy-as-code.git//modules/definition?ref=<pinned-commit>`; replace the placeholder with your organization's selected commit.
+
 This module depends on populating `var.policy_name` and `var.policy_category` to correspond with the respective custom policy definition `json` file found in the [local library](../../policies). You can also parse in other template files and data sources at runtime, see below for examples and acceptable inputs.
 
 > 💡 **Note:** More information on Policy Definition Structure [can be found here](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/definition-structure)

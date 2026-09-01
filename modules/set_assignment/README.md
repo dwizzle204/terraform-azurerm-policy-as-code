@@ -1,6 +1,8 @@
 <!-- BEGIN_TF_DOCS -->
 # POLICY INITIATIVE ASSIGNMENT MODULE
 
+> The snippets below use this repository's relative module paths for in-checkout examples. External consumers must use a pinned Git source, for example `git::https://github.com/dwizzle204/terraform-azurerm-policy-as-code.git//modules/set_assignment?ref=<pinned-commit>`. Replace the placeholder with the commit selected by your organization.
+
 Assignments can be scoped from overarching management groups right down to individual resources by settings the `assignment_scope`.
 
 ## Role Definitions & Assignments

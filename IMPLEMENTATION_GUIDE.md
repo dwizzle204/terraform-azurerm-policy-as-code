@@ -282,7 +282,12 @@ waivers) — see the [governance integration guide](docs/GOVERNANCE_INTEGRATION.
 
 ## 10. Testing and promotion
 
-The normal PR path is **credential-free**:
+The normal PR validation path is **credential-free** because it uses mocked
+providers; this does not make every Terraform operation credential-free. In
+particular, the CAF example's real `terraform plan` hydrates its unpinned
+built-ins through `data.azurerm_policy_definition_built_in` and therefore
+requires an authenticated AzureRM provider. Only the mocked `terraform test`
+path is credential-free.
 
 - `terraform fmt -check -recursive`
 - `tflint --recursive`

@@ -1,6 +1,8 @@
 <!-- BEGIN_TF_DOCS -->
 # POLICY EXEMPTION MODULE
 
+> The snippets below use this repository's relative module paths for in-checkout examples. External consumers must use a pinned Git source, for example `git::https://github.com/dwizzle204/terraform-azurerm-policy-as-code.git//modules/exemption?ref=<pinned-commit>`. Replace the placeholder with the commit selected by your organization.
+
 Exemptions can be used where `not_scopes` become time sensitive or require alternative methods of approval for audit trails. Learn more about Azure Policy [exemption structure](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/exemption-structure).
 
 > 💡**Note:** This module also allows you to exempt multiple scope types at once (e.g. resource group and individual resource) when using a `for_each` loop as in the example below.
