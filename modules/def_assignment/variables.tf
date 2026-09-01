@@ -232,9 +232,9 @@ variable "identity_ids" {
   # every supplied id to be a valid UAMI ARM resource id.
   validation {
     condition = var.identity_ids == null || (
-      length(var.identity_ids) > 0
+      try(length(var.identity_ids), 0) > 0
       && alltrue([
-        for id in var.identity_ids :
+        for id in try(var.identity_ids, []) :
         can(regex("(?i)^/subscriptions/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/resourcegroups/[^/]+/providers/microsoft\\.managedidentity/userassignedidentities/[^/]+$", trimspace(id)))
       ])
     )
