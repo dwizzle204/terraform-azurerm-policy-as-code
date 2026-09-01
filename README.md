@@ -7,18 +7,23 @@
   <br>
   <h1 align="center">Azure Policy as Code with Terraform</h1>
   <p align="center">
-    <a href="https://github.com/gettek/terraform-azurerm-policy-as-code/actions/workflows/cd.yml"><img src="https://github.com/gettek/terraform-azurerm-policy-as-code/actions/workflows/cd.yml/badge.svg?branch=main" alt="CD Tests"></a>
-    <a href="https://github.com/gettek/terraform-azurerm-policy-as-code/actions/workflows/ci.yml"><img src="https://github.com/gettek/terraform-azurerm-policy-as-code/actions/workflows/ci.yml/badge.svg" alt="CI Tests"></a></br>
-    <a href="https://github.com/gettek/terraform-azurerm-policy-as-code/discussions"><img src="https://img.shields.io/badge/topic-discussions-yellowgreen.svg" alt="Go to topic discussions"></a>
+    <a href="https://github.com/dwizzle204/terraform-azurerm-policy-as-code/actions/workflows/cd.yml"><img src="https://github.com/dwizzle204/terraform-azurerm-policy-as-code/actions/workflows/cd.yml/badge.svg?branch=main" alt="CD Tests"></a>
+    <a href="https://github.com/dwizzle204/terraform-azurerm-policy-as-code/actions/workflows/ci.yml"><img src="https://github.com/dwizzle204/terraform-azurerm-policy-as-code/actions/workflows/ci.yml/badge.svg" alt="CI Tests"></a></br>
+    <a href="https://github.com/dwizzle204/terraform-azurerm-policy-as-code/discussions"><img src="https://img.shields.io/badge/topic-discussions-yellowgreen.svg" alt="Go to topic discussions"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-orange.svg" alt="MIT License"></a></br>
-    <a href="https://github.dev/gettek/terraform-azurerm-policy-as-code"><img src="https://img.shields.io/static/v1?logo=refinedgithub&label=&message=Open%20in%20Visual%20Studio%20Code&labelColor=2c2c32&color=007acc&logoColor=007acc" alt="Open in VSCode"></a>
+    <a href="https://github.dev/dwizzle204/terraform-azurerm-policy-as-code"><img src="https://img.shields.io/static/v1?logo=refinedgithub&label=&message=Open%20in%20Visual%20Studio%20Code&labelColor=2c2c32&color=007acc&logoColor=007acc" alt="Open in VSCode"></a>
     </br>
-    <a href="https://registry.terraform.io/modules/gettek/policy-as-code/azurerm/"><img src="https://img.shields.io/badge/dynamic/json?url=https://registry.terraform.io/v2/modules/gettek/policy-as-code/azurerm/downloads/summary&logo=terraform&label=Registry%20Downloads&query=$.data.attributes.total&color=844FBA&logoColor=844FBA" alt="Terraform Registry"></a>
   </p>
 </p>
 <!-- markdownlint-enable MD033 -->
 
+> 🚦 **New implementation? Start with [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) and consume [`modules/intent`](modules/intent).** The other modules are lower-level framework primitives.
+>
+> This repository is a hardened, maintained reference implementation of the policy-as-code pattern. It is **not** the upstream [`gettek/terraform-azurerm-policy-as-code`](https://github.com/gettek/terraform-azurerm-policy-as-code) module and is **not published to the Terraform Registry** — its modules behave differently (fail-fast contracts, opt-in effect-filtered remediation, typed selector validation). Consume it via a pinned Git reference, e.g. `source = "git::https://github.com/dwizzle204/terraform-azurerm-policy-as-code.git//modules/intent?ref=<pin-a-commit-or-release>"` — pin an exact commit or release before production use. In-repo examples use relative local module sources (`./modules/...`).
+
+- [Implementation Guide](IMPLEMENTATION_GUIDE.md) ← start here
 - [Repo Folder Structure](#repo-folder-structure)
+- [New Implementation? (Paved Path)](#new-implementation-paved-path)
 - [Custom Policy Definitions Module](#custom-policy-definitions-module)
 - [Policy Initiative (Set Definitions) Module](#policy-initiative-set-definitions-module)
 - [Policy Definition Assignment Module](#policy-definition-assignment-module)
@@ -102,7 +107,7 @@ This module depends on populating `var.policy_name` and `var.policy_category` to
 
 ```hcl
 module whitelist_regions {
-  source              = "gettek/policy-as-code/azurerm//modules/definition"
+  source              = "./modules/definition"
   policy_name         = "whitelist_regions"
   display_name        = "Allow resources only in whitelisted regions"
   policy_category     = "General"
@@ -119,7 +124,7 @@ Dynamically create a policy set based on multiple custom or built-in policy defi
 
 ```hcl
 module platform_baseline_initiative {
-  source                  = "gettek/policy-as-code/azurerm//modules/initiative"
+  source                  = "./modules/initiative"
   initiative_name         = "platform_baseline_initiative"
   initiative_display_name = "[Platform]: Baseline Policy Set"
   initiative_description  = "Collection of policies representing the baseline platform requirements"
@@ -139,7 +144,7 @@ module platform_baseline_initiative {
 
 ```hcl
 module org_mg_whitelist_regions {
-  source            = "gettek/policy-as-code/azurerm//modules/def_assignment"
+  source            = "./modules/def_assignment"
   definition        = module.whitelist_regions.definition
   assignment_scope  = data.azurerm_management_group.org.id
   assignment_effect = "Deny"
@@ -160,7 +165,7 @@ module org_mg_whitelist_regions {
 
 ```hcl
 module org_mg_platform_diagnostics_initiative {
-  source                  = "gettek/policy-as-code/azurerm//modules/set_assignment"
+  source                  = "./modules/set_assignment"
   initiative              = module.platform_diagnostics_initiative.initiative
   assignment_scope        = data.azurerm_management_group.org.id
   assignment_effect       = "DeployIfNotExists"
@@ -198,7 +203,7 @@ Use the exemption module in favour of `not_scopes` to create an auditable time-s
 
 ```hcl
 module exemption_team_a_mg_deny_nic_public_ip {
-  source               = "gettek/policy-as-code/azurerm//modules/exemption"
+  source               = "./modules/exemption"
   name                 = "Deny NIC Public IP Exemption"
   display_name         = "Exempted while testing"
   description          = "Allows NIC Public IPs for testing"
