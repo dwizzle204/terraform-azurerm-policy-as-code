@@ -222,10 +222,10 @@ variable "identity_ids" {
   # identity ids, which AzureRM rejects at apply. Fail fast instead, and require
   # every supplied id to be a valid UAMI ARM resource id.
   validation {
-    condition = var.identity_ids == null || (
-      try(length(var.identity_ids), 0) > 0
+    condition = var.identity_ids == null ? true : (
+      length(var.identity_ids) > 0
       && alltrue([
-        for id in try(var.identity_ids, []) :
+        for id in var.identity_ids :
         can(regex("(?i)^/subscriptions/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/resourcegroups/[^/]+/providers/microsoft\\.managedidentity/userassignedidentities/[^/]+$", trimspace(id)))
       ])
     )
