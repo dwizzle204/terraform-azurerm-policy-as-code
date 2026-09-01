@@ -162,6 +162,34 @@ jobs:
       - name: Terraform Test (mocked)
         run: terraform test -no-color
 
+  examples-caf-test:
+    name: CAF Example Test (tf ${{ matrix.terraform_version }}) — mocked providers, no Azure creds
+    env:
+      TF_IN_AUTOMATION: true
+      TF_INPUT: false
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        terraform_version: ["~1.11.0", "~1.15.0"]
+    defaults:
+      run:
+        working-directory: examples/caf-landing-zone
+    steps:
+      - uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
+      - uses: hashicorp/setup-terraform@633666f66e0061ca3b725c73b2ec20cd13a8fdd1 # v2
+        with:
+          terraform_version: ${{ matrix.terraform_version }}
+          terraform_wrapper: false
+      - name: Terraform Format
+        run: terraform fmt -check -recursive
+      - name: Terraform Init (backend disabled)
+        run: terraform init -backend=false -no-color
+      - name: Terraform Validate
+        run: terraform validate -no-color
+      - name: Terraform Test (mocked)
+        run: terraform test -no-color
+
   provider-compatibility:
     name: Provider Compatibility (minimum floors azurerm 4.35 / azuread 2.47)
     runs-on: ubuntu-latest

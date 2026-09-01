@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars and replace with your environment's real IDs.
+# Every value must be a full ARM resource ID - this framework never creates
+# management groups; it assigns and exempts against the hierarchy you have.
+
+platform_management_group_id     = "/providers/Microsoft.Management/managementGroups/contoso-platform"
+landing_zones_management_group_id = "/providers/Microsoft.Management/managementGroups/contoso-landing-zones"
+sandboxes_management_group_id     = "/providers/Microsoft.Management/managementGroups/contoso-sandboxes"
+
+# One workload subscription under Landing zones, used for the child-scope
+# governed exemption example.
+landing_zone_subscription_id = "/subscriptions/00000000-0000-0000-0000-000000000000"

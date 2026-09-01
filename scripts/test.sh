@@ -57,6 +57,17 @@ if [ -d examples-intent ]; then
   popd >/dev/null
 fi
 
+if [ -d examples/caf-landing-zone ]; then
+  echo "== CAF landing-zone example (backend disabled, mocked) =="
+  pushd examples/caf-landing-zone >/dev/null
+  "$TF" fmt -check -recursive -no-color || FAILED+=("caf:fmt")
+  "$TFLINT" --init >/dev/null && "$TFLINT" || FAILED+=("tflint:caf")
+  "$TF" init -backend=false -no-color -input=false >"$TMPDIR_INIT_LOG" 2>&1 || { tail -10 "$TMPDIR_INIT_LOG"; FAILED+=("caf:init"); }
+  "$TF" validate -no-color || FAILED+=("caf:validate")
+  "$TF" test -no-color || FAILED+=("caf:test")
+  popd >/dev/null
+fi
+
 echo "== negative check: missing policy definition file errors clearly =="
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
