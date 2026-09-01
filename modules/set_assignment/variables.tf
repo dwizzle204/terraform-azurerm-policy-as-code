@@ -124,7 +124,7 @@ variable "overrides" {
     condition = alltrue(flatten([
       for o in var.overrides : [
         for s in coalesce(o.selectors, []) :
-        length(coalesce(s.in, [])) == 0 || length(coalesce(s.not_in, [])) == 0
+        s.in == null || s.not_in == null
       ]
     ]))
     error_message = "Override selectors cannot specify both in and not_in."
@@ -194,7 +194,7 @@ variable "resource_selectors" {
     condition = alltrue(flatten([
       for rs in var.resource_selectors : flatten([
         for s in rs.selectors : [
-          length(coalesce(s.in, [])) == 0 || length(coalesce(s.not_in, [])) == 0,
+          s.in == null || s.not_in == null,
           length(coalesce(s.in, [])) <= 50,
           length(coalesce(s.not_in, [])) <= 50
         ]

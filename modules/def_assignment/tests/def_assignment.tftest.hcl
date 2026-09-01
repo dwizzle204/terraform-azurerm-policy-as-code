@@ -741,3 +741,74 @@ run "empty_selector_override_is_unconditional_global" {
     error_message = "An empty-selector override is an unconditional global override; the effective effect becomes Audit and no remediation task may be created (issue #65)"
   }
 }
+
+# issue #67: Azure selector contract boundaries
+run "override_selector_in_and_not_in_rejected" {
+  command = plan
+  variables { overrides = [{ value = "Audit", selectors = [{ kind = "resourceLocation", in = [], not_in = ["westus"] }] }] }
+  expect_failures = [var.overrides]
+}
+
+run "resource_selector_in_and_not_in_rejected" {
+  command = plan
+  variables { resource_selectors = [{ name = "bad", selectors = [{ kind = "resourceLocation", in = [], not_in = ["westus"] }] }] }
+  expect_failures = [var.resource_selectors]
+}
+
+run "selector_fifty_values_succeeds" {
+  command = plan
+  variables { resource_selectors = [{ name = "valid", selectors = [{ kind = "resourceLocation", in = formatlist("loc-%02d", range(50)) }] }] }
+}
+
+run "selector_fifty_one_values_rejected" {
+  command = plan
+  variables { resource_selectors = [{ name = "bad", selectors = [{ kind = "resourceLocation", in = formatlist("loc-%02d", range(51)) }] }] }
+  expect_failures = [var.resource_selectors]
+}
+
+run "duplicate_resource_selector_kind_rejected" {
+  command = plan
+  variables { resource_selectors = [{ name = "bad", selectors = [{ kind = "resourceLocation", in = ["eastus"] }, { kind = "resourceLocation", in = ["westus"] }] }] }
+  expect_failures = [var.resource_selectors]
+}
+
+run "location_and_without_location_rejected" {
+  command = plan
+  variables { resource_selectors = [{ name = "bad", selectors = [{ kind = "resourceLocation", in = ["eastus"] }, { kind = "resourceWithoutLocation", in = ["x"] }] }] }
+  expect_failures = [var.resource_selectors]
+}
+
+run "different_resource_selector_kinds_succeed" {
+  command = plan
+  variables { resource_selectors = [{ name = "valid", selectors = [{ kind = "resourceLocation", in = ["eastus"] }, { kind = "resourceType", in = ["Microsoft.Compute/virtualMachines"] }] }] }
+}
+
+run "location_case_difference_is_not_disjoint" {
+  command = plan
+  variables {
+    remediate_effects   = ["DeployIfNotExists"]
+    location_filters    = ["WestEurope"]
+    role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/mock"]
+    overrides           = [{ value = "Audit", selectors = [{ kind = "resourceLocation", in = ["westeurope"] }] }]
+    definition          = merge(var.definition, { policy_rule = jsonencode({ if = {}, then = { effect = "DeployIfNotExists", details = { roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/mock"] } } }) })
+  }
+  assert {
+    condition     = output.remediation_id == ""
+    error_message = "Case-equivalent locations must remain resource-dependent"
+  }
+}
+
+run "friendly_location_name_suppresses_auto_remediation" {
+  command = plan
+  variables {
+    remediate_effects   = ["DeployIfNotExists"]
+    location_filters    = ["East US 2"]
+    role_definition_ids = ["/providers/Microsoft.Authorization/roleDefinitions/mock"]
+    overrides           = [{ value = "Audit", selectors = [{ kind = "resourceLocation", in = ["eastus2"] }] }]
+    definition          = merge(var.definition, { policy_rule = jsonencode({ if = {}, then = { effect = "DeployIfNotExists", details = { roleDefinitionIds = ["/providers/Microsoft.Authorization/roleDefinitions/mock"] } } }) })
+  }
+  assert {
+    condition     = output.remediation_id == ""
+    error_message = "Noncanonical friendly locations must conservatively suppress remediation"
+  }
+}
