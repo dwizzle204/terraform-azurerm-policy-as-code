@@ -121,12 +121,34 @@ variable "overrides" {
   default = []
 
   validation {
-    condition = alltrue([
-      for o in var.overrides : alltrue([
+    condition = alltrue(flatten([
+      for o in var.overrides : [
+        for s in coalesce(o.selectors, []) :
+        length(coalesce(s.in, [])) == 0 || length(coalesce(s.not_in, [])) == 0
+      ]
+    ]))
+    error_message = "Override selectors cannot specify both in and not_in."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for o in var.overrides : flatten([
+        for s in coalesce(o.selectors, []) : [
+          length(coalesce(s.in, [])) <= 50,
+          length(coalesce(s.not_in, [])) <= 50
+        ]
+      ])
+    ]))
+    error_message = "Override selector in and not_in lists support a maximum of 50 values each."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for o in var.overrides : [
         for s in coalesce(o.selectors, []) :
         contains(["policyDefinitionReferenceId", "resourceLocation"], coalesce(s.kind, "policyDefinitionReferenceId"))
-      ])
-    ])
+      ]
+    ]))
     error_message = "Override selector kind must be one of: policyDefinitionReferenceId, resourceLocation."
   }
 
@@ -156,6 +178,29 @@ variable "resource_selectors" {
       ]
     ]))
     error_message = "Resource selector kind must be one of: resourceLocation, resourceType, resourceWithoutLocation."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for rs in var.resource_selectors : [
+        length([for s in rs.selectors : s.kind]) == length(toset([for s in rs.selectors : s.kind])),
+        !contains([for s in rs.selectors : s.kind], "resourceLocation") || !contains([for s in rs.selectors : s.kind], "resourceWithoutLocation")
+      ]
+    ]))
+    error_message = "Resource selector kinds must be unique and cannot combine resourceLocation with resourceWithoutLocation."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for rs in var.resource_selectors : flatten([
+        for s in rs.selectors : [
+          length(coalesce(s.in, [])) == 0 || length(coalesce(s.not_in, [])) == 0,
+          length(coalesce(s.in, [])) <= 50,
+          length(coalesce(s.not_in, [])) <= 50
+        ]
+      ])
+    ]))
+    error_message = "Resource selector in and not_in lists are mutually exclusive and support a maximum of 50 values each."
   }
 
   validation {
@@ -265,6 +310,11 @@ variable "skip_role_assignment" {
 }
 
 locals {
+  # Normalize Azure locations before proving selector disjointness. Friendly/display
+  # names are intentionally not considered provably canonical, so remediation
+  # remains suppressed rather than relying on an unsafe equivalence assumption.
+  normalized_location_filters = [for v in var.location_filters : lower(trimspace(v))]
+
   # assignment_name at MG scope will be trimmed if exceeds 24 characters
   assignment_name_trim = local.assignment_scope.mg > 0 ? 24 : 64
   assignment_name_base = try(lower(coalesce(var.assignment_name, var.initiative.name)), "")
@@ -452,7 +502,7 @@ locals {
       && length([
         for s in coalesce(o.selectors, []) :
         s if coalesce(s.kind, "policyDefinitionReferenceId") != "policyDefinitionReferenceId" && (
-          length(coalesce(s.in, [])) == 0 || length(setintersection(coalesce(s.in, []), var.location_filters)) > 0
+          length(coalesce(s.in, [])) == 0 || !alltrue([for v in concat(coalesce(s.in, []), local.normalized_location_filters) : can(regex("^[a-z0-9-]+$", lower(trimspace(v))))]) || length(setintersection([for v in coalesce(s.in, []) : lower(trimspace(v))], local.normalized_location_filters)) > 0
         )
       ]) == 0
     )

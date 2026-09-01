@@ -38,6 +38,14 @@ Literal `DeployIfNotExists` / `Modify` policy rules are auto-detected for
 remediation even without an effect parameter; `Audit` / `Deny` / `Disabled`
 remain excluded.
 
+## Override contract
+
+The `overrides` input is a `policyEffect`-only abstraction. This module supports
+AzureRM `>= 4.35`; configurable override kinds (including `policyVersion`) were
+introduced later and are intentionally not exposed here. If additional kinds
+are supported in future, remediation effect calculation must ignore non-
+`policyEffect` overrides and the provider compatibility floor will be reviewed.
+
 ## Examples
 
 ### Custom Policy Initiative Assignment with Not-Scope and Overrides (preview)

@@ -9,6 +9,14 @@ A role assignment and remediation task will be automatically created if the `pol
 
 For a cleaner solution, a list of `aad_group_remediation_object_ids` can be supplied for System Assigned Identity membership in favour of role assignments, assuming the appropriate RBAC controls already exist for that group. More info on role assignments can be found in the [main README](../../README.md#role-assignments)
 
+## Override contract
+
+The `overrides` input is a `policyEffect`-only abstraction. This module supports
+AzureRM `>= 4.35`; configurable override kinds (including `policyVersion`) were
+introduced later and are intentionally not exposed here. If additional kinds
+are supported in future, remediation effect calculation must ignore non-
+`policyEffect` overrides and the provider compatibility floor will be reviewed.
+
 ## Examples
 
 ### Assign a definition with Modify effect to automatically create a role assignment and remediation task

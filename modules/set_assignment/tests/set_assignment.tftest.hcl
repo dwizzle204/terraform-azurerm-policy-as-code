@@ -1212,11 +1212,11 @@ run "location_override_disjoint_from_location_filters_is_provable" {
   variables {
     remediate_effects   = ["DeployIfNotExists", "Modify"]
     role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
-    location_filters    = ["northeurope"]
+    location_filters    = ["NorthEurope"]
     overrides = [
       {
         value     = "Audit"
-        selectors = [{ kind = "resourceLocation", in = ["westeurope"] }]
+        selectors = [{ kind = "resourceLocation", in = ["WestEurope"] }]
       }
     ]
     initiative = merge(var.initiative, {
