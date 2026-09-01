@@ -15,6 +15,16 @@ The `assignment_effect` parameter is useful when an initiative contains multiple
 - Omit `assignment_effect` to use each definition's default effect stored in its policy parameters.
 - Specify effects individually by setting them in `assignment_parameters` for more granular control.
 
+## Override contract
+
+The `overrides` input is a `policyEffect`-only abstraction. This module supports
+AzureRM `>= 4.35`; AzureRM 4.43 (September 2025) introduced configurable
+`override.kind` (including `policyVersion`), which is intentionally not exposed
+here. Supporting `policyVersion` requires raising the provider floor to 4.43+.
+If additional kinds
+are supported in future, remediation effect calculation must ignore non-
+`policyEffect` overrides and the provider compatibility floor will be reviewed.
+
 ## Examples
 
 ### Custom Policy Initiative Assignment with Not-Scope and Overrides (preview)
