@@ -226,7 +226,7 @@ variable "identity_ids" {
       length(var.identity_ids) > 0
       && alltrue([
         for id in var.identity_ids :
-        can(regex("(?i)^/subscriptions/[0-9a-f-]{36}/resourcegroups/[^/]+/providers/microsoft\\.managedidentity/userassignedidentities/[^/]+$", trimspace(id)))
+        can(regex("(?i)^/subscriptions/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/resourcegroups/[^/]+/providers/microsoft\\.managedidentity/userassignedidentities/[^/]+$", trimspace(id)))
       ])
     )
     error_message = "identity_ids must be null (for SystemAssigned) or contain at least one valid User Assigned Managed Identity resource ID matching /subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{name}."
@@ -365,6 +365,10 @@ locals {
   parameters = var.assignment_effect != null ? jsonencode(merge(local.parameter_values, { effect = { value = var.assignment_effect } })) : (local.parameter_values != null ? jsonencode(local.parameter_values) : null)
 
   # determine if a managed identity should be created with this assignment
+  # issue #69: forward trimmed UAMI ids to resources — validation
+  # trimspace()s for matching but raw values were previously forwarded.
+  identity_ids_normalized = var.identity_ids != null ? [for id in var.identity_ids : trimspace(id)] : null
+
   identity_type = length(try(coalescelist(var.role_definition_ids, try(var.initiative.role_definition_ids, [])), [])) > 0 ? var.identity_ids != null ? { type = "UserAssigned" } : { type = "SystemAssigned" } : {}
 
   # try to use policy definition roles if explicit roles are omitted

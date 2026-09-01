@@ -49,7 +49,7 @@ resource "azurerm_management_group_policy_assignment" "def" {
     for_each = local.identity_type
     content {
       type         = identity.value
-      identity_ids = var.identity_ids
+      identity_ids = local.identity_ids_normalized
     }
   }
 
@@ -111,7 +111,7 @@ resource "azurerm_subscription_policy_assignment" "def" {
     for_each = local.identity_type
     content {
       type         = identity.value
-      identity_ids = var.identity_ids
+      identity_ids = local.identity_ids_normalized
     }
   }
 
@@ -173,7 +173,7 @@ resource "azurerm_resource_group_policy_assignment" "def" {
     for_each = local.identity_type
     content {
       type         = identity.value
-      identity_ids = var.identity_ids
+      identity_ids = local.identity_ids_normalized
     }
   }
 
@@ -235,7 +235,7 @@ resource "azurerm_resource_policy_assignment" "def" {
     for_each = local.identity_type
     content {
       type         = identity.value
-      identity_ids = var.identity_ids
+      identity_ids = local.identity_ids_normalized
     }
   }
 

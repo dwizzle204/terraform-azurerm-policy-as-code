@@ -37,10 +37,11 @@ Supported selector contracts for `overrides`:
 
 
 
-**Conjunctive selectors:** Azure ANDs all selectors within one override, so
-multiple `policyDefinitionReferenceId` selectors must **all** match the member
-reference for the override to apply; a contradictory selector pair (e.g.
-`in`/`not_in` on the same reference) never applies.
+**Conjunctive selectors:** Azure ANDs all selectors within one override, so an
+override only applies when **every** selector is satisfied; a contradictory
+selector pair (e.g. `in`/`not_in` for the same location set) never applies.
+`policyDefinitionReferenceId` selectors are initiative-scoped and rejected for
+direct definition assignments (#69).
 
 **`resourceWithoutLocation` selectors** only support the value
 `subscriptionLevelResources` (enforced at plan time).
