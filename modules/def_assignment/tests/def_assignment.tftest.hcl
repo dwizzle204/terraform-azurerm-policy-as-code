@@ -891,7 +891,11 @@ run "identity_ids_valid_uami_selects_user_assigned" {
 }
 
 # issue #69 (P1): multiple simultaneously satisfied resourceLocation selectors
-# (AND semantics) still allow the override to apply.
+# (AND semantics) still allow the override to apply. Both selectors fully cover
+# location_filters, so the conjunctive proof succeeds: the Audit override
+# replaces the remediable base effect and suppresses remediation. A partial
+# (ambiguous) configuration would also suppress, but via the ambiguity path —
+# the paired positive assertion below proves full coverage really applies.
 run "multiple_satisfied_location_selectors_apply" {
   command = plan
   variables {
@@ -902,8 +906,8 @@ run "multiple_satisfied_location_selectors_apply" {
       {
         value = "Audit"
         selectors = [
-          { kind = "resourceLocation", in = ["WestEurope"] },
-          { kind = "resourceLocation", in = ["northeurope"] }
+          { kind = "resourceLocation", in = ["WestEurope", "northeurope"] },
+          { kind = "resourceLocation", in = ["westeurope", "NorthEurope"] }
         ]
       }
     ]
@@ -916,7 +920,39 @@ run "multiple_satisfied_location_selectors_apply" {
   }
   assert {
     condition     = output.remediation_id == ""
-    error_message = "When every resourceLocation selector is satisfied (case-insensitively) the override applies and suppresses remediation (issue #69)"
+    error_message = "When every resourceLocation selector fully covers location_filters (case-insensitively) the override provably applies and its non-remediable effect suppresses remediation (issue #69)"
+  }
+}
+
+# issue #69 (P2): the conjunctive proof must be a genuine positive case — with
+# full coverage the remediable override effect is applied and a remediation
+# task IS created. Ambiguity suppression would leave the unresolved effect and
+# produce no task, so this distinguishes application from ambiguity.
+run "multiple_full_coverage_location_selectors_apply_remediable_override" {
+  command = plan
+  variables {
+    remediate_effects   = ["DeployIfNotExists", "Modify"]
+    location_filters    = ["westeurope", "northeurope"]
+    role_definition_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
+    overrides = [
+      {
+        value = "DeployIfNotExists"
+        selectors = [
+          { kind = "resourceLocation", in = ["westeurope", "northeurope"] },
+          { kind = "resourceLocation", in = ["northeurope", "westeurope"] }
+        ]
+      }
+    ]
+    definition = merge(var.definition, {
+      policy_rule = jsonencode({
+        if   = { field = "type", equals = "Microsoft.Resources/subscriptions/resources" }
+        then = { effect = "Audit" }
+      })
+    })
+  }
+  assert {
+    condition     = output.remediation_id != ""
+    error_message = "Full selector coverage of location_filters must apply the remediable override effect and create a remediation task — ambiguity suppression would produce none (issue #69)"
   }
 }
 

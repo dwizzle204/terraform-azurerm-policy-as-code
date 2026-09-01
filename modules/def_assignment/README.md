@@ -26,10 +26,11 @@ initiative-scoped and are **rejected at plan time** here (use the
 Supported selector contracts for `overrides`:
 
 - **no selectors**: an unconditional global override
-- `resourceLocation` (`in` only): applied when every selector's location set
-  provably intersects the remediation task's `location_filters`; treated as
-  resource-dependent (automatic remediation suppressed) when no proof is
-  possible, and excluded entirely when provably disjoint
+- `resourceLocation` (`in` only): applied only when the selectors provably
+  cover the remediation task's `location_filters` — every filtered location
+  must be contained in **every** selector's `in` set (full coverage); any
+  partial coverage is resource-dependent (automatic remediation suppressed),
+  and the override is excluded entirely when provably disjoint
 
 `resource_selectors` additionally support `resourceType` and
 `resourceWithoutLocation`; the latter only accepts the value
@@ -269,10 +270,12 @@ Remediation is **opt-in and effect-aware**: the effective effect is the
 explicitly selects this definition by name when the resolved effect is unresolved (empty). Known non-remediable effects remain rejected even when explicitly listed. Override selectors on a **direct definition assignment** are `resourceLocation`-only
 (`policyDefinitionReferenceId` is initiative-scoped and rejected at plan time, #69).
 An `overrides` entry is conjunctive (Azure ANDs its selectors): it replaces the
-effective effect when every `resourceLocation` selector provably intersects the
-remediation task's `location_filters` (or when it has no selectors — a global
-override); it is excluded entirely when provably disjoint; otherwise it is
-resource-dependent and automatic remediation is suppressed.
+effective effect only when the selectors provably **cover the entire**
+remediation task's `location_filters` — every filtered location must appear in
+every `resourceLocation` selector's `in` set (or when it has no selectors — a
+global override); it is excluded entirely when provably disjoint; otherwise
+(partial coverage) it is resource-dependent and automatic remediation is
+suppressed.
 Module-managed
 role assignments now run before remediation tasks (`depends_on`). See
 `modules/set_assignment/README.md` for the privilege table and externally

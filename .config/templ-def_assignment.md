@@ -25,10 +25,11 @@ initiative-scoped and are **rejected at plan time** here (use the
 Supported selector contracts for `overrides`:
 
 - **no selectors**: an unconditional global override
-- `resourceLocation` (`in` only): applied when every selector's location set
-  provably intersects the remediation task's `location_filters`; treated as
-  resource-dependent (automatic remediation suppressed) when no proof is
-  possible, and excluded entirely when provably disjoint
+- `resourceLocation` (`in` only): applied only when the selectors provably
+  cover the remediation task's `location_filters` — every filtered location
+  must be contained in **every** selector's `in` set (full coverage); any
+  partial coverage is resource-dependent (automatic remediation suppressed),
+  and the override is excluded entirely when provably disjoint
 
 `resource_selectors` additionally support `resourceType` and
 `resourceWithoutLocation`; the latter only accepts the value
