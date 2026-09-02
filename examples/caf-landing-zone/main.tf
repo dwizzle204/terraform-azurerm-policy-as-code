@@ -99,7 +99,6 @@ module "policy_intent" {
       remediate                 = true
       remediate_effects         = ["DeployIfNotExists", "Modify"]
       remediation_reference_ids = []
-      role_definition_ids       = ["/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"]
       parameters                = {}
       assignment_location       = "westeurope"
       metadata = {
@@ -167,8 +166,8 @@ module "policy_intent" {
       display_name         = "Waiver: data residency migration in progress"
       description          = "Temporary waiver while this workload migrates its data plane out of a non-allowed region. Tracked by ARCH-1234; re-evaluated at expiry."
       category             = "Waiver"
-      expires_on           = "2099-12-31" # update when promoting this example
-      policy_reference_ids = []           # empty = exempt the whole assignment
+      expires_on           = var.governed_waiver_expires_on
+      policy_reference_ids = [] # empty = exempt the whole assignment
       governed = {
         owner              = "workload-team"
         tracking_reference = "ARCH-1234"

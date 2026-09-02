@@ -60,7 +60,7 @@ waives it for **one workload subscription** (`landing_zone_subscription_id`).
 
 ```text
 Landing zones MG  ── assignment: landing-zones-guardrails (Deny, enforced)
-└── subscription  ── exemption: lz-waiver-data-residency-migration (expires 2099-12-31)
+└── subscription  ── exemption: lz-waiver-data-residency-migration (future expiry)
 ```
 
 The exemption is linked by the assignment's **logical key** (`assignment_key`),

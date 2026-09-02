@@ -22,3 +22,8 @@ variable "landing_zone_subscription_id" {
   description = "Full ARM resource ID of one workload subscription under the Landing zones management group. Used to demonstrate a child-scope exemption against a parent-MG assignment. Example: /subscriptions/00000000-0000-0000-0000-000000000000"
   type        = string
 }
+
+variable "governed_waiver_expires_on" {
+  description = "Expiry date for the governed waiver; must be strictly later than the plan date (YYYY-MM-DD)."
+  type        = string
+}

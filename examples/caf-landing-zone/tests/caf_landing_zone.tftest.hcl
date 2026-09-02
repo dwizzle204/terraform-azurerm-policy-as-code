@@ -58,6 +58,7 @@ variables {
   landing_zones_management_group_id = "/providers/Microsoft.Management/managementGroups/landing-zones"
   sandboxes_management_group_id     = "/providers/Microsoft.Management/managementGroups/sandboxes"
   landing_zone_subscription_id      = "/subscriptions/11111111-1111-1111-1111-111111111111"
+  governed_waiver_expires_on        = "2099-12-31"
 }
 
 run "caf_assignment_scopes_are_wired" {

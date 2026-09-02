@@ -126,7 +126,7 @@ module "policy_intent" {
       name           = "legacy-app-waiver"
       display_name   = "Legacy App Waiver"
       description    = "Temporary waiver pending decommission"
-      expires_on     = "2026-12-31"
+      expires_on     = var.governed_waiver_expires_on # caller must set a future date
       governed = {
         owner              = "app-team"
         tracking_reference = "RISK-2914"

@@ -9,3 +9,6 @@ sandboxes_management_group_id     = "/providers/Microsoft.Management/managementG
 # One workload subscription under Landing zones, used for the child-scope
 # governed exemption example.
 landing_zone_subscription_id = "/subscriptions/00000000-0000-0000-0000-000000000000"
+
+# Must be strictly later than the date of every plan using this waiver.
+governed_waiver_expires_on = "2099-12-31"
