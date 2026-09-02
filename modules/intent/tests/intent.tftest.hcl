@@ -121,7 +121,7 @@ run "exemption_attaches_to_intended_assignment" {
         name           = "legacy-app-waiver"
         display_name   = "Legacy App Waiver"
         description    = "Temporary waiver pending decommission"
-        expires_on     = "2026-12-31"
+        expires_on     = "2099-12-31"
         governed = {
           owner              = "app-team"
           tracking_reference = "RISK-2914"

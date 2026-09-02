@@ -1,6 +1,6 @@
 # Azure Policy Machine Configuration for Virtual Machines
 
-[![cd-machine-config](https://github.com/gettek/terraform-azurerm-policy-as-code/actions/workflows/cd-guest-config.yml/badge.svg)](https://github.com/gettek/terraform-azurerm-policy-as-code/actions/workflows/cd-guest-config.yml)
+[![cd-machine-config](https://github.com/dwizzle204/terraform-azurerm-policy-as-code/actions/workflows/cd-guest-config.yml/badge.svg)](https://github.com/dwizzle204/terraform-azurerm-policy-as-code/actions/workflows/cd-guest-config.yml)
 
 > 💡 **Note:** Azure Policy Guest Configuration is now called Azure Automanage Machine Configuration. [Learn more about the recent renaming of Microsoft configuration management services.](https://techcommunity.microsoft.com/t5/azure-governance-and-management/coming-soon-guest-configuration-renames-to-machine-configuration/ba-p/3474116)
 

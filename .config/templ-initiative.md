@@ -1,5 +1,7 @@
 # POLICY INITIATIVE MODULE
 
+> These are in-checkout templates and use relative module paths. External consumers must use a pinned Git source such as `git::https://github.com/dwizzle204/terraform-azurerm-policy-as-code.git//modules/initiative?ref=<pinned-commit>`; replace the placeholder with your organization's selected commit.
+
 Dynamically creates a policy set based on multiple custom or built-in policy definitions
 
 > ⚠️ **Warning:** To simplify assignments, if any `member_definitions` contain the same parameter names they will be [merged](https://www.terraform.io/language/functions/merge) unless you specify `merge_effects = false` or `merge_parameters = false` as described in the third example below. When `false` parameters will be suffixed with their respective reference Ids e.g. `"effect_AutoEnrollSubscriptions"`.
@@ -22,7 +24,7 @@ Please see [duplicate_members.tf](../../examples/duplicate_members.tf) as en exa
 
 ```hcl
 module configure_asc_initiative {
-  source                  = "gettek/policy-as-code/azurerm//modules/initiative"
+  source                  = "../../modules/initiative"
   initiative_name         = "configure_asc_initiative"
   initiative_display_name = "[Security]: Configure Azure Security Center"
   initiative_description  = "Deploys and configures Azure Security Center settings and defines exports"
@@ -47,7 +49,7 @@ data azurerm_policy_definition deploy_law_on_linux_vms {
 }
 
 module configure_asc_initiative {
-  source                  = "gettek/policy-as-code/azurerm//modules/initiative"
+  source                  = "../../modules/initiative"
   initiative_name         = "configure_asc_initiative"
   initiative_display_name = "[Security]: Configure Azure Security Center"
   initiative_description  = "Deploys and configures Azure Security Center settings and defines exports"

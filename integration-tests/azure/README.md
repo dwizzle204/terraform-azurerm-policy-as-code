@@ -17,7 +17,7 @@ Only tests that require real ARM API behavior:
 
 - A **disposable** Azure subscription (never shared or production)
 - Contributor + User Access Administrator on that subscription
-- Terraform >= 1.7
+- Terraform >= 1.11 (repository compatibility floor; see [COMPATIBILITY.md](../../COMPATIBILITY.md))
 
 ## Running
 

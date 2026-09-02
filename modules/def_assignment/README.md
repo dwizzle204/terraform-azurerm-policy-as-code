@@ -1,6 +1,8 @@
 <!-- BEGIN_TF_DOCS -->
 # POLICY DEFINITION ASSIGNMENT MODULE
 
+> The snippets below use this repository's relative module paths for in-checkout examples. External consumers must use a pinned Git source, for example `git::https://github.com/dwizzle204/terraform-azurerm-policy-as-code.git//modules/def_assignment?ref=<pinned-commit>`. Replace the placeholder with the commit selected by your organization.
+
 Assignments can be scoped from overarching management groups right down to individual resources by settings the `assignment_scope`.
 
 ## Role Definitions & Assignments
@@ -53,7 +55,7 @@ direct definition assignments (#69).
 
 ```hcl
 module team_a_mg_inherit_resource_group_tags_modify {
-  source            = "gettek/policy-as-code/azurerm//modules/def_assignment"
+  source            = "../../modules/def_assignment"
   definition        = module.inherit_resource_group_tags_modify.definition
   assignment_scope  = data.azurerm_management_group.team_a.id
   assignment_effect = "Modify"
@@ -73,7 +75,7 @@ data azurerm_role_definition contributor {
 }
 
 module team_a_mg_inherit_resource_group_tags_modify {
-  source            = "gettek/policy-as-code/azurerm//modules/def_assignment"
+  source            = "../../modules/def_assignment"
   definition        = module.inherit_resource_group_tags_modify.definition
   assignment_scope  = data.azurerm_management_group.team_a.id
   assignment_effect = "Modify"
@@ -102,7 +104,7 @@ data azurerm_policy_definition_built_in deploy_law_on_linux_vms {
 }
 
 module team_a_mg_deploy_law_on_linux_vms {
-  source            = "gettek/policy-as-code/azurerm//modules/def_assignment"
+  source            = "../../modules/def_assignment"
   definition        = data.azurerm_policy_definition_built_in.deploy_law_on_linux_vms
   assignment_scope  = data.azurerm_management_group.team_a.id
   skip_remediation  = var.skip_remediation
@@ -127,7 +129,7 @@ data "azuread_group" "policy_remediation" {
 }
 
 module team_a_mg_inherit_resource_group_tags_modify {
-  source               = "gettek/policy-as-code/azurerm//modules/def_assignment"
+  source               = "../../modules/def_assignment"
   definition           = module.inherit_resource_group_tags_modify.definition
   assignment_scope     = data.azurerm_management_group.team_a.id
   skip_remediation     = false
@@ -154,7 +156,7 @@ The example below demonstrates the acceptable format for this module:
 
 ```hcl
 module "org_mg_whitelist_regions" {
-  source            = "gettek/policy-as-code/azurerm//modules/def_assignment"
+  source            = "../../modules/def_assignment"
   definition        = module.whitelist_regions.definition
   assignment_scope  = data.azurerm_management_group.org.id
   assignment_effect = "Deny"

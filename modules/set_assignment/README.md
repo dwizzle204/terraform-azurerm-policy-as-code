@@ -1,6 +1,8 @@
 <!-- BEGIN_TF_DOCS -->
 # POLICY INITIATIVE ASSIGNMENT MODULE
 
+> The snippets below use this repository's relative module paths for in-checkout examples. External consumers must use a pinned Git source, for example `git::https://github.com/dwizzle204/terraform-azurerm-policy-as-code.git//modules/set_assignment?ref=<pinned-commit>`. Replace the placeholder with the commit selected by your organization.
+
 Assignments can be scoped from overarching management groups right down to individual resources by settings the `assignment_scope`.
 
 ## Role Definitions & Assignments
@@ -76,7 +78,7 @@ The optional `overrides` property allows you to change the effect of a member de
 
 ```hcl
 module org_mg_configure_asc_initiative {
-  source                 = "gettek/policy-as-code/azurerm//modules/set_assignment"
+  source                 = "../../modules/set_assignment"
   initiative             = module.configure_asc_initiative.initiative
   assignment_scope       = data.azurerm_management_group.org.id
   assignment_effect      = "DeployIfNotExists"
@@ -134,7 +136,7 @@ data "azurerm_policy_set_definition" "cis_1_3_0" {
 }
 
 module org_mg_cis_1_3_0_benchmark {
-  source           = "gettek/policy-as-code/azurerm//modules/set_assignment"
+  source           = "../../modules/set_assignment"
   initiative       = data.azurerm_policy_set_definition.cis_1_3_0
   assignment_scope = data.azurerm_management_group.org.id
 
@@ -157,7 +159,7 @@ data "azurerm_role_definition" "vm_contributor" {
 }
 
 module org_mg_configure_az_monitor_linux_vm_initiative {
-  source           = "gettek/policy-as-code/azurerm//modules/set_assignment"
+  source           = "../../modules/set_assignment"
   initiative       = data.azurerm_policy_set_definition.configure_az_monitor_linux_vm_initiative
   assignment_scope = data.azurerm_management_group.org.id
   skip_remediation = false

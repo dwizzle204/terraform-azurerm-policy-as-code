@@ -13,7 +13,7 @@ opt-in integration tests touch live Azure.
 | Static analysis | `terraform fmt -check -recursive` | No | Canonical formatting |
 | Linting | `tflint --recursive` | No | Terraform lint rules (deprecated syntax, unused declarations, provider constraints) |
 | Module validation | `terraform init -backend=false && terraform validate` | No | Configuration/provider schema validity |
-| Offline contract tests | `terraform test` (per module, mocked providers) | No | Module logic: scope parsing, naming, parameter merging, identity/enforcement-gated remediation selection, exemptions, initiative references |
+| Offline contract tests | `terraform test` (per module, mocked providers) | No | Module logic: scope parsing, naming, parameter merging, effect-aware opt-in remediation selection, exemptions, initiative references |
 | Negative validation | `scripts/test.sh` scratch plan | No | Missing policy definition files fail with a clear file error |
 | Live integration | `terraform test` in `integration-tests/azure/` | **Yes** (disposable subscription) | ARM API acceptance of custom policy definitions (identity/RBAC propagation and real remediation require disposable fixtures — extend before adding) |
 
@@ -24,7 +24,9 @@ opt-in integration tests touch live Azure.
 ```
 
 Runs every offline layer and prints `ALL OFFLINE GATES PASSED` on success.
-Requires Terraform >= 1.7 (`mock_provider`; developed against ~1.15) and
+Requires Terraform >= 1.11 (repository compatibility floor; see
+[COMPATIBILITY.md](COMPATIBILITY.md); `mock_provider` and `override_during`
+are used, developed against ~1.15) and
 [tflint](https://github.com/terraform-linters/tflint#installation) — both are
 hard requirements for a successful build.
 
@@ -41,10 +43,12 @@ and use `mock_provider "azurerm"` / `"azuread"`:
   `var.policy_version`), library path resolution against the repo policies
   folder
 - **set_assignment** — scope-to-resource selection (MG/sub/RG), assignment
-  name trimming to 24 chars at MG scope, identity gating of remediation
-  tasks, `skip_remediation`, effect merge into parameters
+  name trimming to 24 chars at MG scope, identity requirement for remediation
+  tasks, effect-aware per-member remediation selection, `skip_remediation`,
+  effect merge into parameters, `DoNotEnforce` remediation parity
 - **def_assignment** — scope selection, name trimming, explicit vs
-  policy-rule role definition handling, remediation on/off, effect merge
+  policy-rule role definition handling, effect-aware opt-in remediation on/off,
+  effect merge, override selector contracts
 - **exemption** — scope-to-resource selection, default category, expiry date
   normalization, camel case reference conversion, metadata encoding
 
@@ -80,9 +84,12 @@ Writing these tests exposed and fixed three real defects:
 
 ### Documented upstream behaviors
 
-- Remediation tasks are gated on enforcement mode + managed identity, **not**
-  on member effect — even Audit-effect members receive remediation tasks
-  (`remediation_tasks_are_not_effect_filtered_upstream`).
+- Remediation is **opt-in** (`remediate = true` / `skip_remediation = false`)
+  and **effect-aware**: only `DeployIfNotExists`/`Modify` members (or members
+  explicitly selected via `remediation_reference_ids`) receive remediation
+  tasks. `enforcementMode` no longer gates explicitly requested remediation
+  (`DoNotEnforce` assignments can still create remediation tasks, matching
+  Azure's documented behavior).
 - In `definition`, file `metadata.version` takes precedence over
   `var.policy_version`.
 

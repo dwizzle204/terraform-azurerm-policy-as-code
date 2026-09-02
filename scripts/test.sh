@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Credential-free validation gate for terraform-azurerm-policy-as-code (issue #16)
 # Layers: fmt -> per-module init/validate/test -> examples validate -> missing-definition negative check.
-# Requires no Azure tenant or credentials. Terraform >= 1.7 (mock_provider) required.
+# Requires no Azure tenant or credentials. Terraform >= 1.11 (mock_provider) required.
 set -euo pipefail
 
 TF="${TF_BIN:-terraform}"
@@ -54,6 +54,17 @@ if [ -d examples-intent ]; then
   echo "== examples-intent validate (backend disabled) =="
   pushd examples-intent >/dev/null
   "$TF" init -backend=false -no-color >/dev/null && "$TF" validate -no-color >/dev/null || FAILED+=("examples-intent:validate")
+  popd >/dev/null
+fi
+
+if [ -d examples/caf-landing-zone ]; then
+  echo "== CAF landing-zone example (backend disabled, mocked) =="
+  pushd examples/caf-landing-zone >/dev/null
+  "$TF" fmt -check -recursive -no-color || FAILED+=("caf:fmt")
+  "$TFLINT" --init >/dev/null && "$TFLINT" || FAILED+=("tflint:caf")
+  "$TF" init -backend=false -no-color -input=false >"$TMPDIR_INIT_LOG" 2>&1 || { tail -10 "$TMPDIR_INIT_LOG"; FAILED+=("caf:init"); }
+  "$TF" validate -no-color || FAILED+=("caf:validate")
+  "$TF" test -no-color || FAILED+=("caf:test")
   popd >/dev/null
 fi
 

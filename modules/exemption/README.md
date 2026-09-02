@@ -1,6 +1,8 @@
 <!-- BEGIN_TF_DOCS -->
 # POLICY EXEMPTION MODULE
 
+> The snippets below use this repository's relative module paths for in-checkout examples. External consumers must use a pinned Git source, for example `git::https://github.com/dwizzle204/terraform-azurerm-policy-as-code.git//modules/exemption?ref=<pinned-commit>`. Replace the placeholder with the commit selected by your organization.
+
 Exemptions can be used where `not_scopes` become time sensitive or require alternative methods of approval for audit trails. Learn more about Azure Policy [exemption structure](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/exemption-structure).
 
 > 💡**Note:** This module also allows you to exempt multiple scope types at once (e.g. resource group and individual resource) when using a `for_each` loop as in the example below.
@@ -11,7 +13,7 @@ Exemptions can be used where `not_scopes` become time sensitive or require alter
 
 ```hcl
 module exemption_team_a_mg_deny_nic_public_ip {
-  source               = "gettek/policy-as-code/azurerm//modules/exemption"
+  source               = "../../modules/exemption"
   name                 = "Deny NIC Public IP Exemption"
   display_name         = "Exempted while testing"
   description          = "Allows NIC Public IPs for testing"
@@ -34,7 +36,7 @@ module exemption_team_a_mg_deny_nic_public_ip {
 
 ```hcl
 module exemption_team_a_mg_deny_nic_public_ip {
-  source = "gettek/policy-as-code/azurerm//modules/exemption"
+  source = "../../modules/exemption"
   for_each = toset([
     data.azurerm_management_group.team_a.id,
     data.azurerm_subscription.current.id,
@@ -53,7 +55,7 @@ module exemption_team_a_mg_deny_nic_public_ip {
 
 ```hcl
 module "exemption_configure_asc_initiative" {
-  source               = "gettek/policy-as-code/azurerm//modules/exemption"
+  source               = "../../modules/exemption"
   name                 = "Onboard subscription to ASC Exemption"
   display_name         = "Exempted while testing"
   description          = "Excludes subscription from ASC onboarding during development"
@@ -72,7 +74,7 @@ module "exemption_configure_asc_initiative" {
 
 ```hcl
 module exemption_team_a_mg_deny_nic_public_ip {
-  source               = "gettek/policy-as-code/azurerm//modules/exemption"
+  source               = "../../modules/exemption"
   name                 = "Deny NIC Public IP Exemption"
   display_name         = "Exempted while testing"
   description          = "Allows NIC Public IPs for testing"
@@ -92,7 +94,7 @@ data azurerm_resources keyvaults {
 }
 
 module exemption_team_a_mg_key_vaults_require_purge_protection {
-  source               = "gettek/policy-as-code/azurerm//modules/exemption"
+  source               = "../../modules/exemption"
   for_each             = toset(data.azurerm_resources.keyvaults.resources.*.id)
   name                 = "Key vaults should have purge protection enabled Exemption"
   display_name         = "Exempted while testing"
